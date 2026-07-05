@@ -1,43 +1,16 @@
-const nodemailer = require("nodemailer");
 require("dotenv").config();
 
 const {
-  GMAIL_USER,
-  GMAIL_APP_PASSWORD,
-  SMTP_HOST,
-  SMTP_PORT,
-  SMTP_SECURE,
-  SMTP_USER,
-  SMTP_PASS,
-  EMAIL_FROM,
+  EMAILJS_SERVICE_ID,
+  EMAILJS_TEMPLATE_ID,
+  EMAILJS_PUBLIC_KEY,
+  EMAILJS_PRIVATE_KEY,
 } = process.env;
 
-function getSmtpConfig() {
-  const authUser = SMTP_USER || GMAIL_USER;
-  const authPass = SMTP_PASS || GMAIL_APP_PASSWORD;
-  const host = SMTP_HOST || (GMAIL_USER ? "smtp.gmail.com" : "");
-  const port = Number(SMTP_PORT) || (host === "smtp.gmail.com" ? 465 : 587);
-  const secure = SMTP_SECURE ? SMTP_SECURE === "true" : port === 465;
+const EMAILJS_SEND_URL = "https://api.emailjs.com/api/v1.0/email/send";
 
-  return { authUser, authPass, host, port, secure };
-}
-
-function createTransporter() {
-  const { authUser, authPass, host, port, secure } = getSmtpConfig();
-
-  if (!host || !authUser || !authPass) {
-    throw new Error("SMTP credentials are missing in .env");
-  }
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: {
-      user: authUser,
-      pass: authPass,
-    },
-  });
+function hasEmailJsConfig() {
+  return Boolean(EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY);
 }
 
 async function sendPasswordResetOtp({
@@ -47,84 +20,46 @@ async function sendPasswordResetOtp({
   expiresMinutes,
 }) {
   try {
-    const transporter = createTransporter();
-    const { authUser } = getSmtpConfig();
+    if (!hasEmailJsConfig()) {
+      throw new Error("EmailJS credentials are missing in .env");
+    }
 
-    await transporter.verify();
+    const response = await fetch(EMAILJS_SEND_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        service_id: EMAILJS_SERVICE_ID,
+        template_id: EMAILJS_TEMPLATE_ID,
+        user_id: EMAILJS_PUBLIC_KEY,
+        accessToken: EMAILJS_PRIVATE_KEY || undefined,
+        template_params: {
+          to_email: to,
+          to_name: username || "User",
+          username: username || "User",
+          otp,
+          expires_minutes: expiresMinutes,
+          app_name: "InvestIQ",
+        },
+      }),
+    });
 
-    const mailOptions = {
-      from: EMAIL_FROM || `"InvestIQ" <${authUser}>`,
-      to,
-      subject: "InvestIQ Password Reset OTP",
+    const responseText = await response.text();
 
-      text: `
-Hello ${username || "User"},
+    if (!response.ok) {
+      throw new Error(responseText || `EmailJS request failed with status ${response.status}`);
+    }
 
-Your password reset OTP is:
-
-${otp}
-
-This OTP expires in ${expiresMinutes} minutes.
-
-If you did not request this password reset, simply ignore this email.
-
-Thanks,
-InvestIQ Team
-      `,
-
-      html: `
-      <div style="font-family:Arial,sans-serif;padding:30px;background:#f5f5f5">
-        <div style="max-width:600px;margin:auto;background:white;padding:30px;border-radius:10px">
-
-          <h2 style="color:#2563eb">
-            InvestIQ Password Reset
-          </h2>
-
-          <p>Hello <b>${username || "User"}</b>,</p>
-
-          <p>Use the OTP below to reset your password.</p>
-
-          <div style="
-              text-align:center;
-              font-size:34px;
-              font-weight:bold;
-              letter-spacing:8px;
-              color:#2563eb;
-              margin:25px 0;">
-              ${otp}
-          </div>
-
-          <p>
-            This OTP will expire in
-            <b>${expiresMinutes} minutes</b>.
-          </p>
-
-          <p style="color:#666">
-            If you didn't request this password reset,
-            you can safely ignore this email.
-          </p>
-
-          <hr>
-
-          <p style="font-size:12px;color:#999">
-            InvestIQ
-          </p>
-
-        </div>
-      </div>
-      `,
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-
-    console.log("Email Sent:", info.messageId);
+    console.log("EmailJS OTP sent:", responseText || response.status);
 
     return {
       sent: true,
-      messageId: info.messageId,
+      provider: "emailjs",
+      response: responseText,
     };
   } catch (error) {
-    console.error("SMTP Error:", error.message);
+    console.error("EmailJS Error:", error.message);
 
     return {
       sent: false,
@@ -136,4 +71,3 @@ InvestIQ Team
 module.exports = {
   sendPasswordResetOtp,
 };
-

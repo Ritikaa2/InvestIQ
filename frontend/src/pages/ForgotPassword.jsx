@@ -68,7 +68,7 @@ const ForgotPassword = () => {
           </div>
           <h2 className="text-2xl font-display font-extrabold text-slate-800 dark:text-slate-100">Reset Password</h2>
           <p className="text-xs text-slate-400 mt-1">
-            {step === 'email' ? 'Enter your email to receive a reset OTP.' : 'Enter the OTP from Gmail and choose a new password.'}
+            {step === 'email' ? 'Enter your email to receive a reset OTP.' : 'Enter the OTP from your email and choose a new password.'}
           </p>
         </div>
 
@@ -103,7 +103,7 @@ const ForgotPassword = () => {
           <form onSubmit={handleSubmit(resetPassword)} className="space-y-4">
             {devOtp && (
               <div className="p-4 bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 rounded-xl text-xs leading-relaxed">
-                Email credentials are not configured. Development OTP: <strong>{devOtp}</strong>
+                EmailJS credentials are not configured. Development OTP: <strong>{devOtp}</strong>
               </div>
             )}
 
@@ -168,4 +168,5 @@ const ForgotPassword = () => {
 };
 
 export default ForgotPassword;
+
 

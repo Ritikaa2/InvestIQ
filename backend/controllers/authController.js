@@ -179,7 +179,7 @@ module.exports = {
         success: true,
         message: emailResult.sent
           ? 'Password reset OTP sent to your email.'
-          : 'Password reset OTP generated. Configure Gmail SMTP credentials to send it by email.'
+          : 'Password reset OTP generated. Configure EmailJS credentials to send it by email.'
       };
 
       if (!emailResult.sent && process.env.NODE_ENV !== 'production') {
@@ -355,4 +355,5 @@ module.exports = {
     }
   }
 };
+
 
