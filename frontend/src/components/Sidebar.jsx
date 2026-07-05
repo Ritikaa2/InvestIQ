@@ -55,7 +55,7 @@ const Sidebar = () => {
               className="flex items-center gap-2.5 text-[17px] font-display font-extrabold text-slate-900 dark:text-white cursor-pointer"
             >
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-blue-700 text-xs text-white shadow-lg shadow-brand-500/20">IQ</span>
-              <span>Invest<span className="text-brand-600">IQ</span></span>
+              <span>Alpha<span className="text-brand-600"></span></span>
             </motion.div>
           )}
           <button 
