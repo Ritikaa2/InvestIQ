@@ -1,10 +1,11 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
 import { EnvelopeIcon, KeyIcon, LockClosedIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
 import { api } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import { newPasswordRules } from '../utils/passwordPolicy';
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
@@ -133,10 +134,7 @@ const ForgotPassword = () => {
                   type="password" 
                   placeholder="--------"
                   className={`w-full glass-input pl-10 pr-4 py-2 text-xs ${errors.password ? 'border-red-500 focus:ring-red-500/20' : ''}`}
-                  {...register('password', { 
-                    required: 'New password is required',
-                    minLength: { value: 6, message: 'Password must be at least 6 characters long' }
-                  })}
+                  {...register('password', newPasswordRules)}
                 />
               </div>
               {errors.password && <span className="text-[10px] text-red-500 mt-1 block">{errors.password.message}</span>}

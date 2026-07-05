@@ -1,4 +1,5 @@
-﻿const { body } = require('express-validator');
+const { body } = require('express-validator');
+const { PASSWORD_POLICY_MESSAGE, isStrongPassword } = require('../utils/passwordPolicy');
 
 module.exports = {
   registerValidator: [
@@ -16,7 +17,7 @@ module.exports = {
     
     body('password')
       .notEmpty().withMessage('Password is required')
-      .isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')
+      .custom((value) => isStrongPassword(value)).withMessage(PASSWORD_POLICY_MESSAGE)
   ],
 
   loginValidator: [
@@ -54,7 +55,7 @@ module.exports = {
   resetPasswordValidator: [
     body('password')
       .notEmpty().withMessage('New password is required')
-      .isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
+      .custom((value) => isStrongPassword(value)).withMessage(PASSWORD_POLICY_MESSAGE),
 
     body('email')
       .if(body('token').not().exists())
@@ -71,3 +72,4 @@ module.exports = {
       .isNumeric().withMessage('OTP must contain only numbers')
   ]
 };
+

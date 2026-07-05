@@ -157,8 +157,4 @@ CREATE TABLE IF NOT EXISTS company_cache (
     expires_at DATETIME NOT NULL,
     updated_at DATETIME DEFAULT NULL,
     PRIMARY KEY (ticker)
-<<<<<<< HEAD
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-=======
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
->>>>>>> 94888be (Update code)

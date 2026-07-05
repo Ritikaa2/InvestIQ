@@ -13,6 +13,7 @@ import {
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { api } from '../context/AuthContext';
+import { newPasswordRules } from '../utils/passwordPolicy';
 
 const Profile = () => {
   const { user, updateProfile } = useAuth();
@@ -266,12 +267,9 @@ const Profile = () => {
                     </label>
                     <input 
                       type="password" 
-                      placeholder="••••••••"
-                      className="w-full glass-input px-3 py-2 text-xs" 
-                      {...register('newPassword', { 
-                        required: 'New password is required', 
-                        minLength: { value: 6, message: 'Password must be at least 6 characters long' } 
-                      })}
+                      placeholder="--------"
+                      className="w-full glass-input px-3 py-2 text-xs"
+                      {...register('newPassword', newPasswordRules)}
                     />
                     {errors.newPassword && <span className="text-[9px] text-red-500 mt-1 block">{errors.newPassword.message}</span>}
                   </div>
@@ -282,7 +280,7 @@ const Profile = () => {
                     </label>
                     <input 
                       type="password" 
-                      placeholder="••••••••"
+                      placeholder="--------"
                       className="w-full glass-input px-3 py-2 text-xs" 
                       {...register('confirmPassword', { 
                         required: 'Please confirm password' 
@@ -313,3 +311,4 @@ const Profile = () => {
 };
 
 export default Profile;
+

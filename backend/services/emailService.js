@@ -1,68 +1,139 @@
-const nodemailer = require('nodemailer');
-require('dotenv').config();
+const nodemailer = require("nodemailer");
+require("dotenv").config();
 
 const {
+  GMAIL_USER,
+  GMAIL_APP_PASSWORD,
   SMTP_HOST,
   SMTP_PORT,
   SMTP_SECURE,
   SMTP_USER,
   SMTP_PASS,
   EMAIL_FROM,
-  GMAIL_USER,
-  GMAIL_APP_PASSWORD
 } = process.env;
 
+function getSmtpConfig() {
+  const authUser = SMTP_USER || GMAIL_USER;
+  const authPass = SMTP_PASS || GMAIL_APP_PASSWORD;
+  const host = SMTP_HOST || (GMAIL_USER ? "smtp.gmail.com" : "");
+  const port = Number(SMTP_PORT) || (host === "smtp.gmail.com" ? 465 : 587);
+  const secure = SMTP_SECURE ? SMTP_SECURE === "true" : port === 465;
+
+  return { authUser, authPass, host, port, secure };
+}
+
 function createTransporter() {
-  if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
-    return nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: Number(SMTP_PORT || 587),
-      secure: SMTP_SECURE === 'true',
-      auth: { user: SMTP_USER, pass: SMTP_PASS }
-    });
+  const { authUser, authPass, host, port, secure } = getSmtpConfig();
+
+  if (!host || !authUser || !authPass) {
+    throw new Error("SMTP credentials are missing in .env");
   }
 
-  if (GMAIL_USER && GMAIL_APP_PASSWORD) {
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
-    });
-  }
-
-  return null;
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: {
+      user: authUser,
+      pass: authPass,
+    },
+  });
 }
 
-async function sendPasswordResetOtp({ to, username, otp, expiresMinutes }) {
-  const transporter = createTransporter();
-  const from = EMAIL_FROM || GMAIL_USER || SMTP_USER || 'InvestIQ <no-reply@investiq.local>';
-  const displayName = username || 'InvestIQ user';
-  const subject = 'Your InvestIQ password reset OTP';
-  const text = [
-    `Hi ${displayName},`,
-    '',
-    `Your InvestIQ password reset OTP is ${otp}.`,
-    `This code expires in ${expiresMinutes} minutes.`,
-    '',
-    'If you did not request this, you can ignore this email.'
-  ].join('\n');
-  const html = `
-    <div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.5">
-      <h2 style="margin:0 0 12px">InvestIQ password reset</h2>
-      <p>Hi ${displayName},</p>
-      <p>Use this one-time password to reset your InvestIQ account password:</p>
-      <p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:16px 0">${otp}</p>
-      <p>This code expires in ${expiresMinutes} minutes.</p>
-      <p style="color:#64748b;font-size:13px">If you did not request this, you can ignore this email.</p>
-    </div>
-  `;
+async function sendPasswordResetOtp({
+  to,
+  username,
+  otp,
+  expiresMinutes,
+}) {
+  try {
+    const transporter = createTransporter();
+    const { authUser } = getSmtpConfig();
 
-  if (!transporter) {
-    console.warn(`Email credentials are not configured. Password reset OTP for ${to}: ${otp}`);
-    return { sent: false };
+    await transporter.verify();
+
+    const mailOptions = {
+      from: EMAIL_FROM || `"InvestIQ" <${authUser}>`,
+      to,
+      subject: "InvestIQ Password Reset OTP",
+
+      text: `
+Hello ${username || "User"},
+
+Your password reset OTP is:
+
+${otp}
+
+This OTP expires in ${expiresMinutes} minutes.
+
+If you did not request this password reset, simply ignore this email.
+
+Thanks,
+InvestIQ Team
+      `,
+
+      html: `
+      <div style="font-family:Arial,sans-serif;padding:30px;background:#f5f5f5">
+        <div style="max-width:600px;margin:auto;background:white;padding:30px;border-radius:10px">
+
+          <h2 style="color:#2563eb">
+            InvestIQ Password Reset
+          </h2>
+
+          <p>Hello <b>${username || "User"}</b>,</p>
+
+          <p>Use the OTP below to reset your password.</p>
+
+          <div style="
+              text-align:center;
+              font-size:34px;
+              font-weight:bold;
+              letter-spacing:8px;
+              color:#2563eb;
+              margin:25px 0;">
+              ${otp}
+          </div>
+
+          <p>
+            This OTP will expire in
+            <b>${expiresMinutes} minutes</b>.
+          </p>
+
+          <p style="color:#666">
+            If you didn't request this password reset,
+            you can safely ignore this email.
+          </p>
+
+          <hr>
+
+          <p style="font-size:12px;color:#999">
+            InvestIQ
+          </p>
+
+        </div>
+      </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+
+    console.log("Email Sent:", info.messageId);
+
+    return {
+      sent: true,
+      messageId: info.messageId,
+    };
+  } catch (error) {
+    console.error("SMTP Error:", error.message);
+
+    return {
+      sent: false,
+      error: error.message,
+    };
   }
-
-  await transporter.sendMail({ from, to, subject, text, html });
-  return { sent: true };
 }
 
-module.exports = { sendPasswordResetOtp };
+module.exports = {
+  sendPasswordResetOtp,
+};
+

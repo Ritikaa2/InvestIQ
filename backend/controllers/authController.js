@@ -1,8 +1,9 @@
-﻿const bcrypt = require('bcryptjs');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const db = require('../config/db');
 const { sendPasswordResetOtp } = require('../services/emailService');
+const { PASSWORD_POLICY_MESSAGE, isStrongPassword } = require('../utils/passwordPolicy');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_change_me_in_production';
@@ -329,6 +330,10 @@ module.exports = {
       }
 
       if (password) {
+        if (!isStrongPassword(password)) {
+          return res.status(400).json({ success: false, message: PASSWORD_POLICY_MESSAGE });
+        }
+
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
         await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, req.user.id]);
@@ -350,6 +355,4 @@ module.exports = {
     }
   }
 };
-
-
 
