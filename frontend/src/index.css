@@ -19,19 +19,12 @@
 
   body {
     @apply min-h-screen bg-slate-50 text-slate-800 font-sans transition-colors duration-300;
-    background-image:
-      linear-gradient(rgba(14, 165, 233, 0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(99, 102, 241, 0.035) 1px, transparent 1px),
-      linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
-    background-size: 44px 44px, 44px 44px, 100% 100%;
+    background: #f7f9fc;
   }
   
   body.dark {
     @apply bg-slate-950 text-slate-100;
-    background-image:
-      linear-gradient(rgba(56, 189, 248, 0.045) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(129, 140, 248, 0.04) 1px, transparent 1px),
-      linear-gradient(180deg, #0b0f19 0%, #111827 48%, #090d16 100%);
+    background: #090d16;
   }
 
   button,
@@ -69,19 +62,15 @@
 }
 
 .glass-panel {
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  @apply rounded-lg border border-white/80 bg-white/75 shadow-[0_18px_50px_rgba(15,23,42,0.08)] transition-colors duration-300;
+  @apply rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03),0_8px_24px_rgba(15,23,42,0.045)] transition-all duration-300;
 }
 
 .dark .glass-panel {
-  @apply border-slate-700/50 bg-slate-900/70 shadow-[0_18px_55px_rgba(0,0,0,0.36)];
+  @apply border-slate-800/80 bg-slate-900 shadow-[0_12px_32px_rgba(0,0,0,0.22)];
 }
 
 .glass-card {
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  @apply rounded-lg border border-slate-200/70 bg-white/60 shadow-sm transition-all duration-300;
+  @apply rounded-2xl border border-slate-200/80 bg-white shadow-sm transition-all duration-300;
 }
 
 .dark .glass-card {
@@ -89,11 +78,21 @@
 }
 
 .glass-input {
-  @apply rounded-lg border border-slate-200/80 bg-white/80 text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/15;
+  @apply rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 shadow-sm transition-all focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/15;
 }
 
 .dark .glass-input {
   @apply border-slate-700/75 bg-slate-950/50 text-slate-100 placeholder-slate-500;
+}
+
+@layer components {
+  .page-eyebrow { @apply mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400; }
+  .page-title { @apply font-display text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-3xl; }
+  .page-subtitle { @apply mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400; }
+  .section-title { @apply font-display text-sm font-bold text-slate-900 dark:text-white; }
+  .soft-card { @apply rounded-xl border border-slate-200/70 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-950/30; }
+  .primary-button { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-bold text-white shadow-[0_8px_18px_rgba(2,132,199,0.18)] transition hover:-translate-y-0.5 hover:bg-brand-700 disabled:pointer-events-none disabled:opacity-50; }
+  .icon-button { @apply inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800; }
 }
 
 .skeleton-shimmer {

@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { API_ORIGIN, useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -16,7 +16,8 @@ import {
   MoonIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
-  BellIcon
+  BellIcon,
+  UserIcon
 } from '@heroicons/react/24/outline';
 
 const Sidebar = () => {
@@ -30,30 +31,31 @@ const Sidebar = () => {
     { name: t('dashboard'), path: '/dashboard', icon: ChartBarIcon },
     { name: t('research'), path: '/research', icon: MagnifyingGlassIcon },
     { name: t('history'), path: '/history', icon: ClockIcon },
-    { name: t('bookmarks'), path: '/watchlist', icon: BookmarkIcon },
     { name: t('savedReports'), path: '/saved-reports', icon: DocumentTextIcon },
-    { name: t('analytics'), path: '/analytics', icon: ChartBarIcon },
+    { name: t('bookmarks'), path: '/watchlist', icon: BookmarkIcon },
+    { name: t('profile'), path: '/profile', icon: UserIcon },
     { name: t('settings'), path: '/settings', icon: Cog6ToothIcon },
   ];
 
   return (
     <motion.div
-      animate={{ width: collapsed ? 80 : 260 }}
+      animate={{ width: collapsed ? 76 : 238 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="sticky top-0 h-screen glass-panel rounded-none border-y-0 border-l-0 flex flex-col justify-between p-4 z-40"
+      className="sticky top-0 h-screen bg-white dark:bg-slate-950 border-r border-slate-200/80 dark:border-slate-900 flex flex-col justify-between p-3.5 z-40 shadow-none"
     >
       {/* Upper Logo Section */}
       <div>
-        <div className="flex items-center justify-between mb-8 px-2">
+        <div className="flex items-center justify-between mb-7 px-1.5 pt-1">
           {!collapsed && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => navigate('/')}
-              className="text-2xl font-display font-extrabold bg-gradient-to-r from-brand-500 to-indigo-500 bg-clip-text text-transparent cursor-pointer"
+              className="flex items-center gap-2.5 text-[17px] font-display font-extrabold text-slate-900 dark:text-white cursor-pointer"
             >
-              InvestIQ
+              <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-blue-700 text-xs text-white shadow-lg shadow-brand-500/20">IQ</span>
+              <span>Invest<span className="text-brand-600">IQ</span></span>
             </motion.div>
           )}
           <button 
@@ -65,7 +67,7 @@ const Sidebar = () => {
         </div>
 
         {/* Navigation Items */}
-        <nav className="space-y-1.5">
+        <nav className="space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -73,10 +75,10 @@ const Sidebar = () => {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) => 
-                  `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                  `flex items-center gap-3 px-3 py-2.5 rounded-xl font-semibold text-[13px] transition-all duration-200 ${
                     isActive 
-                      ? 'bg-brand-500 text-white shadow-md shadow-brand-500/10' 
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100/60 dark:hover:bg-slate-800/40'
+                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-400' 
+                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-900 dark:hover:text-white'
                   }`
                 }
               >

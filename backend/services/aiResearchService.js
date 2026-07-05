@@ -5,26 +5,77 @@ const financeService = require('./financeService');
 const newsService = require('./newsService');
 const prompts = require('../langchain/prompts');
 require('dotenv').config();
+function normalizeCompanyName(value, ticker) {
+  const name = typeof value === 'string' ? value.trim() : '';
+  const fallbackTicker = String(ticker || '').toUpperCase().trim();
+  return name || (fallbackTicker ? `${fallbackTicker} Corporation` : 'Unknown Company');
+}
+
+function normalizeReport(report, ticker, companyName) {
+  const normalizedTicker = String(ticker || report?.profile?.ticker || '').toUpperCase().trim();
+  const normalizedName = normalizeCompanyName(
+    report?.profile?.companyName || report?.profile?.name || companyName,
+    normalizedTicker
+  );
+
+  return {
+    ...report,
+    profile: {
+      ...(report?.profile || {}),
+      ticker: normalizedTicker,
+      companyName: normalizedName
+    }
+  };
+}
+
+function safeParseJson(text) {
+  if (!text) return null;
+  let clean = String(text).trim();
+  if (clean.startsWith('```')) {
+    clean = clean.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+  }
+  try {
+    return JSON.parse(clean);
+  } catch (e) {
+    const firstBrace = clean.indexOf('{');
+    const lastBrace = clean.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      try {
+        return JSON.parse(clean.slice(firstBrace, lastBrace + 1));
+      } catch (innerError) {
+        console.error('Failed to parse JSON using brace extraction:', innerError);
+      }
+    }
+    throw new Error(`JSON parsing failed: ${e.message}. Text was: ${text}`);
+  }
+}
 
 // Helper to determine LLM model based on settings
-function getModel() {
-  const provider = process.env.AI_PROVIDER || 'gemini';
+function getModel(selectedModel) {
+  const provider = selectedModel || process.env.AI_PROVIDER || 'gemini';
   const geminiKey = process.env.GEMINI_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
 
-  if (provider === 'openai' && openaiKey && openaiKey !== 'your_openai_api_key') {
-    return new ChatOpenAI({
-      openAIApiKey: openaiKey,
-      modelName: 'gpt-4o-mini',
-      temperature: 0.2
-    });
-  } else if (geminiKey && geminiKey !== 'your_gemini_api_key') {
-    return new ChatGoogleGenerativeAI({
-      apiKey: geminiKey,
-      modelName: 'gemini-1.5-flash',
-      temperature: 0.2
-    });
+  try {
+    if (provider === 'openai' && openaiKey && openaiKey !== 'your_openai_api_key') {
+      return new ChatOpenAI({
+        openAIApiKey: openaiKey,
+        modelName: 'gpt-4o-mini',
+        temperature: 0.2
+      });
+    }
+
+    if (geminiKey && geminiKey !== 'your_gemini_api_key') {
+      return new ChatGoogleGenerativeAI({
+        apiKey: geminiKey,
+        modelName: 'gemini-1.5-flash',
+        temperature: 0.2
+      });
+    }
+  } catch (error) {
+    console.warn('[AIResearchService] AI model initialization failed; using deterministic local engine:', error.message);
   }
+
   return null;
 }
 
@@ -36,6 +87,18 @@ function getDeterministicReport(ticker, companyName, profileData, financialsData
     hash = t.charCodeAt(i) + ((hash << 5) - hash);
   }
   hash = Math.abs(hash);
+
+  const knownProfiles = {
+    AAPL: { ceo: 'Tim Cook', headquarters: 'Cupertino, CA' },
+    MSFT: { ceo: 'Satya Nadella', headquarters: 'Redmond, WA' },
+    TSLA: { ceo: 'Elon Musk', headquarters: 'Austin, TX' },
+    AMZN: { ceo: 'Andy Jassy', headquarters: 'Seattle, WA' },
+    GOOGL: { ceo: 'Sundar Pichai', headquarters: 'Mountain View, CA' },
+    GOOG: { ceo: 'Sundar Pichai', headquarters: 'Mountain View, CA' },
+    GOOGLE: { ceo: 'Sundar Pichai', headquarters: 'Mountain View, CA' },
+    NVDA: { ceo: 'Jensen Huang', headquarters: 'Santa Clara, CA' }
+  };
+  const kp = knownProfiles[t] || {};
 
   const competitorList = [
     { name: t === 'AAPL' ? 'Microsoft' : 'Apple', marketShareEstimated: `${(hash % 10) + 20}%`, keyAdvantage: 'Ecosystem lock-in', keyDisadvantage: 'Premium pricing barriers' },
@@ -49,15 +112,18 @@ function getDeterministicReport(ticker, companyName, profileData, financialsData
 
   return {
     profile: {
+      ticker: t,
+      companyName,
       overview: `${companyName} (${t}) is a prominent enterprise in the ${profileData.sector} sector, leading within the ${profileData.industry} space. The firm stands out for its strong balance sheet, high research and development spend, and massive global customer reach. Recent quarterly reviews show sustained growth across major product divisions.`,
       sector: profileData.sector,
       industry: profileData.industry,
       coreProducts: ['Flagship Software platforms', 'Cloud Hosting Services', 'Hardware Products', 'Subscription Plans'],
       customerBase: 'Enterprise companies, SMBs, and retail consumer populations globally.',
-      ceo: ['Tim Cook', 'Satya Nadella', 'Elon Musk', 'Andy Jassy', 'Sundar Pichai'][hash % 5],
-      headquarters: ['Cupertino, CA', 'Redmond, WA', 'Austin, TX', 'Seattle, WA', 'Mountain View, CA'][hash % 5]
+      ceo: kp.ceo || ['Tim Cook', 'Satya Nadella', 'Elon Musk', 'Andy Jassy', 'Sundar Pichai'][hash % 5],
+      headquarters: kp.headquarters || ['Cupertino, CA', 'Redmond, WA', 'Austin, TX', 'Seattle, WA', 'Mountain View, CA'][hash % 5]
     },
     financials: {
+      ...financialsData,
       overview: `${companyName} is in an excellent financial position with market capitalization of $${(financialsData.marketCap / 1e9).toFixed(2)}B. Operating cash flows are sufficient to fund capital expenditures while leaving surplus free cash flow for stock buybacks.`,
       rating: 'Liquidity ratios are healthy. Operating margin is solid at ' + financialsData.profitMargin.toFixed(1) + '% indicating high pricing power.',
       metricEvaluations: {
@@ -159,12 +225,12 @@ function getDeterministicReport(ticker, companyName, profileData, financialsData
 }
 
 module.exports = {
-  runResearch: async (ticker, companyNameInput, onStep = () => {}) => {
+  runResearch: async (ticker, companyNameInput, selectedModel, onStep = () => {}) => {
     const t = ticker.toUpperCase().trim();
     let companyName = companyNameInput || `${t} Corp`;
     
     const startTime = Date.now();
-    const model = getModel();
+    const model = getModel(selectedModel);
 
     onStep({ step: 0, name: 'Initialization', status: 'running', log: `Initializing Research Pipeline for ${t}...` });
 
@@ -190,25 +256,25 @@ module.exports = {
         // Real node: Competitor Agent
         const competitorPrompt = prompts.competitorPrompt(companyName, profile.sector, ['Competitor A', 'Competitor B']);
         const competitorRes = await model.invoke(competitorPrompt);
-        const competitorData = JSON.parse(competitorRes.text || competitorRes.content);
-
+        const competitorData = safeParseJson(competitorRes.text || competitorRes.content);
+ 
         // SWOT Agent Node
         onStep({ step: 5, name: 'SWOT Assessment', status: 'running', log: `Running AI SWOT Agent for ${companyName}...` });
         const swotPrompt = prompts.swotPrompt(companyName, profile, financials, news);
         const swotRes = await model.invoke(swotPrompt);
-        const swotData = JSON.parse(swotRes.text || swotRes.content);
-
+        const swotData = safeParseJson(swotRes.text || swotRes.content);
+ 
         // Risk Agent Node
         onStep({ step: 6, name: 'Risk Evaluation', status: 'running', log: `Running AI Risk Management Agent for ${companyName}...` });
         const riskPrompt = prompts.riskPrompt(companyName, financials, competitorData);
         const riskRes = await model.invoke(riskPrompt);
-        const riskData = JSON.parse(riskRes.text || riskRes.content);
-
+        const riskData = safeParseJson(riskRes.text || riskRes.content);
+ 
         // Decision Agent Node
         onStep({ step: 7, name: 'Investment Decision', status: 'running', log: `Running Investment Committee Decision Agent...` });
         const decisionPrompt = prompts.decisionPrompt(companyName, { profile, financials, news, competitorData, swotData, riskData });
         const decisionRes = await model.invoke(decisionPrompt);
-        const decisionData = JSON.parse(decisionRes.text || decisionRes.content);
+        const decisionData = safeParseJson(decisionRes.text || decisionRes.content);
 
         const totalTime = Date.now() - startTime;
         
@@ -230,7 +296,7 @@ module.exports = {
           data: report
         });
 
-        return report;
+        return normalizeReport(report, t, companyName);
       } catch (err) {
         console.error('LLM node execution failed, falling back to deterministic generation:', err);
         onStep({ step: 4, name: 'Agent Error', status: 'warning', log: `AI LLM Node failed. Activating deterministic local engine...` });
@@ -266,7 +332,6 @@ module.exports = {
       data: mockReport
     });
 
-    return mockReport;
+    return normalizeReport(mockReport, t, companyName);
   }
 };
-

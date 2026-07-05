@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { API_ORIGIN, useAuth, api } from '../context/AuthContext';
@@ -55,7 +55,7 @@ const MainLayout = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="flex min-h-screen bg-[#f7f9fc] dark:bg-slate-950 transition-colors duration-300">
       {/* Sidebar */}
       <Sidebar />
 
@@ -63,7 +63,7 @@ const MainLayout = () => {
       <div className="flex-grow flex flex-col min-w-0">
         
         {/* Sticky Top Navbar */}
-        <header className="sticky top-0 bg-white/70 dark:bg-slate-950/70 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-900/50 h-16 flex items-center justify-between px-6 z-30">
+        <header className="sticky top-0 bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-900 h-[68px] flex items-center justify-between px-5 lg:px-8 z-30">
           
           {/* Left search suggestions */}
           <form onSubmit={handleSearchSubmit} className="relative w-80 max-w-lg hidden sm:block">
@@ -73,7 +73,7 @@ const MainLayout = () => {
               placeholder={t('enterTicker')} 
               value={searchVal}
               onChange={(e) => setSearchVal(e.target.value)}
-              className="w-full glass-input pl-10 pr-4 py-1.5 text-sm"
+              className="w-full glass-input pl-10 pr-4 py-2 text-xs bg-slate-50/80"
             />
           </form>
           <div className="sm:hidden text-lg font-semibold bg-gradient-to-r from-brand-500 to-indigo-500 bg-clip-text text-transparent">InvestIQ</div>
@@ -137,14 +137,14 @@ const MainLayout = () => {
                 src={user.avatar_url?.startsWith('/') ? `${API_ORIGIN}${user.avatar_url}` : user.avatar_url} 
                 alt="Profile" 
                 className="w-8 h-8 rounded-full object-cover ring-2 ring-brand-500/10 cursor-pointer"
-                onClick={() => navigate('/settings')}
+                onClick={() => navigate('/profile')}
               />
             )}
           </div>
         </header>
 
         {/* Content Outlet */}
-        <main className="flex-grow p-6 overflow-y-auto max-w-[1600px] mx-auto w-full">
+        <main className="flex-grow px-4 py-6 sm:px-6 lg:px-8 lg:py-8 overflow-y-auto max-w-[1480px] mx-auto w-full">
           <Outlet />
         </main>
       </div>

@@ -3,13 +3,13 @@ const db = require('../config/db');
 module.exports = {
   updateSettings: async (req, res, next) => {
     try {
-      const { theme, language, notifications_enabled } = req.body;
+      const { theme, language, notifications_enabled, ai_model } = req.body;
       const userId = req.user.id;
 
       // Update settings in database
       const [result] = await db.query(
-        'UPDATE settings SET theme = ?, language = ?, notifications_enabled = ? WHERE user_id = ?',
-        [theme || 'dark', language || 'en', notifications_enabled !== false ? 1 : 0, userId]
+        'UPDATE settings SET theme = ?, language = ?, notifications_enabled = ?, ai_model = ? WHERE user_id = ?',
+        [theme || 'dark', language || 'en', notifications_enabled !== false ? 1 : 0, ai_model || 'gemini', userId]
       );
 
       return res.json({
@@ -18,7 +18,8 @@ module.exports = {
         settings: {
           theme,
           language,
-          notifications_enabled: Boolean(notifications_enabled)
+          notifications_enabled: Boolean(notifications_enabled),
+          ai_model: ai_model || 'gemini'
         }
       });
     } catch (error) {

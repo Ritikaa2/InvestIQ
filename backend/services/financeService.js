@@ -18,6 +18,8 @@ function getDeterministicStockData(ticker) {
     TSLA: { name: 'Tesla, Inc.', sector: 'Consumer Cyclical', industry: 'Auto Manufacturers', cap: 550000000000, price: 175.40, pe: 42.1, eps: 4.10, gr: 0.18, margin: 0.10 },
     AMZN: { name: 'Amazon.com, Inc.', sector: 'Consumer Cyclical', industry: 'Internet Retail', cap: 1900000000000, price: 180.10, pe: 39.4, eps: 4.55, gr: 0.14, margin: 0.06 },
     GOOGL: { name: 'Alphabet Inc.', sector: 'Technology', industry: 'Internet Content & Information', cap: 2100000000000, price: 170.30, pe: 25.2, eps: 6.80, gr: 0.11, margin: 0.24 },
+    GOOG: { name: 'Alphabet Inc.', sector: 'Technology', industry: 'Internet Content & Information', cap: 2100000000000, price: 170.30, pe: 25.2, eps: 6.80, gr: 0.11, margin: 0.24 },
+    GOOGLE: { name: 'Alphabet Inc.', sector: 'Technology', industry: 'Internet Content & Information', cap: 2100000000000, price: 170.30, pe: 25.2, eps: 6.80, gr: 0.11, margin: 0.24 },
     NVDA: { name: 'NVIDIA Corporation', sector: 'Technology', industry: 'Semiconductors', cap: 2800000000000, price: 120.40, pe: 65.2, eps: 1.85, gr: 0.85, margin: 0.48 }
   };
 

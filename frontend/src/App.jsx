@@ -22,6 +22,7 @@ import SavedReports from './pages/SavedReports';
 import Analytics from './pages/Analytics';
 import ReportDetails from './pages/ReportDetails';
 import Settings from './pages/Settings';
+import Profile from './pages/Profile';
 
 // Helper Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -90,6 +91,7 @@ function App() {
                 <Route path="analytics" element={<Analytics />} />
                 <Route path="report/:id" element={<ReportDetails />} />
                 <Route path="settings" element={<Settings />} />
+                <Route path="profile" element={<Profile />} />
               </Route>
 
               {/* Catch-all 404 */}

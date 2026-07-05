@@ -4,11 +4,14 @@ module.exports = {
   addBookmark: async (req, res, next) => {
     try {
       const { ticker, company_name } = req.body;
-      if (!ticker || !company_name) {
-        return res.status(400).json({ success: false, message: 'Ticker and company name are required.' });
+      if (!ticker) {
+        return res.status(400).json({ success: false, message: 'Ticker is required.' });
       }
 
       const tickerUpper = ticker.toUpperCase().trim();
+      const companyName = typeof company_name === 'string' && company_name.trim()
+        ? company_name.trim()
+        : `${tickerUpper} Corporation`;
 
       // Check if already bookmarked
       const [exists] = await db.query(
@@ -22,7 +25,7 @@ module.exports = {
 
       const [result] = await db.query(
         'INSERT INTO bookmarks (user_id, company_name, ticker) VALUES (?, ?, ?)',
-        [req.user.id, company_name, tickerUpper]
+        [req.user.id, companyName, tickerUpper]
       );
 
       return res.status(201).json({
@@ -31,7 +34,7 @@ module.exports = {
         bookmark: {
           id: result.insertId,
           user_id: req.user.id,
-          company_name,
+          company_name: companyName,
           ticker: tickerUpper
         }
       });

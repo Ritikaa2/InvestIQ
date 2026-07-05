@@ -17,18 +17,72 @@ const POPULAR_COMPANIES = [
   { ticker: 'DIS', name: 'The Walt Disney Company' },
   { ticker: 'BRK.A', name: 'Berkshire Hathaway Inc.' }
 ];
+function normalizeText(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
 
+function resolveResearchInput(body) {
+  const rawInput = normalizeText(body?.ticker || body?.companyName || body?.company_name || body?.query);
+  const normalizedInput = rawInput.toLowerCase();
+  const known = POPULAR_COMPANIES.find(company =>
+    company.ticker.toLowerCase() === normalizedInput ||
+    company.name.toLowerCase() === normalizedInput ||
+    company.name.toLowerCase().includes(normalizedInput) ||
+    normalizedInput.includes(company.name.toLowerCase())
+  );
+
+  if (known) {
+    return { ticker: known.ticker.toUpperCase(), companyName: known.name, rawInput };
+  }
+
+  const compactTicker = rawInput.toUpperCase().replace(/[^A-Z0-9.]/g, '').slice(0, 10);
+  const looksLikeTicker = /^[A-Z0-9.]{1,10}$/.test(rawInput.toUpperCase());
+  const ticker = looksLikeTicker ? rawInput.toUpperCase() : compactTicker;
+  const companyName = looksLikeTicker ? '' : rawInput;
+
+  return {
+    ticker: ticker || rawInput.toUpperCase().slice(0, 10) || 'UNKNOWN',
+    companyName,
+    rawInput
+  };
+}
+
+function fallbackCompanyName(ticker) {
+  const normalizedTicker = normalizeText(ticker).toUpperCase();
+  const known = POPULAR_COMPANIES.find(company => company.ticker === normalizedTicker);
+  return known?.name || (normalizedTicker ? `${normalizedTicker} Corporation` : 'Unknown Company');
+}
+
+function getReportCompanyName(report, ticker) {
+  return normalizeText(report?.profile?.companyName) ||
+    normalizeText(report?.profile?.name) ||
+    normalizeText(report?.companyName) ||
+    normalizeText(report?.company_name) ||
+    fallbackCompanyName(ticker);
+}
+
+function normalizeReportForStorage(report, ticker) {
+  const normalizedTicker = normalizeText(ticker || report?.profile?.ticker).toUpperCase();
+  const companyName = getReportCompanyName(report, normalizedTicker);
+
+  return {
+    ...report,
+    profile: {
+      ...(report?.profile || {}),
+      ticker: normalizedTicker,
+      companyName
+    }
+  };
+}
 module.exports = {
   // SSE-based Agent research workflow streamer
   researchCompany: async (req, res, next) => {
-    const { ticker } = req.body;
+    const { ticker: tickerUpper, companyName: requestedCompanyName } = resolveResearchInput(req.body);
     const userId = req.user.id;
     
-    if (!ticker) {
-      return res.status(400).json({ success: false, message: 'Stock ticker is required.' });
+    if (!tickerUpper) {
+      return res.status(400).json({ success: false, message: 'Company name or ticker is required.' });
     }
-
-    const tickerUpper = ticker.toUpperCase().trim();
 
     // Set headers for Server-Sent Events (SSE)
     res.writeHead(200, {
@@ -51,6 +105,8 @@ module.exports = {
       // Check company cache database
       const cachedReport = await cacheService.getDbCache(tickerUpper);
       if (cachedReport) {
+        const storedReport = normalizeReportForStorage(cachedReport, tickerUpper);
+        const companyName = storedReport.profile.companyName;
         sendSSEEvent('info', { message: `Cache hit! Compiling stored research dossier for ${tickerUpper}...` });
         
         // Simulating rapid progress bars for cached reports
@@ -76,7 +132,7 @@ module.exports = {
         // Insert into research history
         const [historyResult] = await db.query(
           'INSERT INTO research_history (user_id, company_name, ticker, status, response_time_ms, tokens_used) VALUES (?, ?, ?, ?, ?, ?)',
-          [userId, cachedReport.profile.companyName, tickerUpper, 'completed', 100, 0]
+          [userId, companyName, tickerUpper, 'completed', 100, 0]
         );
         const historyId = historyResult.insertId;
 
@@ -86,24 +142,24 @@ module.exports = {
           [
             historyId,
             userId,
-            cachedReport.profile.companyName,
+            companyName,
             tickerUpper,
-            JSON.stringify(cachedReport),
-            cachedReport.decision.investmentScore,
-            cachedReport.decision.recommendation,
-            cachedReport.decision.aiSummary
+            JSON.stringify(storedReport),
+            storedReport.decision.investmentScore,
+            storedReport.decision.recommendation,
+            storedReport.decision.aiSummary
           ]
         );
         
         // Send welcoming notification
         await db.query(
           'INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)',
-          [userId, 'Research Completed', `AI report compiled successfully for ${cachedReport.profile.companyName} (${tickerUpper}).`]
+          [userId, 'Research Completed', `AI report compiled successfully for ${companyName} (${tickerUpper}).`]
         );
 
         sendSSEEvent('complete', {
           reportId: reportResult.insertId,
-          data: cachedReport
+          data: storedReport
         });
         return res.end();
       }
@@ -114,25 +170,33 @@ module.exports = {
       // Initialize pending history row
       const [initHistory] = await db.query(
         'INSERT INTO research_history (user_id, company_name, ticker, status) VALUES (?, ?, ?, ?)',
-        [userId, tickerUpper, tickerUpper, 'pending']
+        [userId, requestedCompanyName || fallbackCompanyName(tickerUpper), tickerUpper, 'pending']
       );
       const historyId = initHistory.insertId;
 
-      const finalReport = await aiResearchService.runResearch(
+      // Retrieve user's settings to check selected model
+      const [settingsList] = await db.query('SELECT * FROM settings WHERE user_id = ?', [userId]);
+      const userSettings = settingsList && settingsList.length > 0 ? settingsList[0] : null;
+      const selectedModel = userSettings?.ai_model || 'gemini';
+
+      let finalReport = await aiResearchService.runResearch(
         tickerUpper,
-        null,
+        requestedCompanyName || null,
+        selectedModel,
         (progress) => {
           sendSSEEvent('progress', progress);
         }
       );
+      finalReport = normalizeReportForStorage(finalReport, tickerUpper);
+      const companyName = finalReport.profile.companyName;
 
       const duration = Date.now() - startTime;
       const tokensUsed = Math.floor(duration / 10) + 1200; // estimated tokens
 
       // Update history row
       await db.query(
-        'UPDATE research_history SET status = ?, response_time_ms = ?, tokens_used = ? WHERE id = ?',
-        ['completed', duration, tokensUsed, historyId]
+        'UPDATE research_history SET company_name = ?, status = ?, response_time_ms = ?, tokens_used = ? WHERE id = ?',
+        [companyName, 'completed', duration, tokensUsed, historyId]
       );
 
       // Save report in DB
@@ -141,7 +205,7 @@ module.exports = {
         [
           historyId,
           userId,
-          finalReport.profile.companyName,
+          companyName,
           tickerUpper,
           JSON.stringify(finalReport),
           finalReport.decision.investmentScore,
@@ -152,12 +216,12 @@ module.exports = {
       const reportId = reportInsert.insertId;
 
       // Add report to cache
-      await cacheService.setDbCache(tickerUpper, finalReport.profile.companyName, finalReport, 24);
+      await cacheService.setDbCache(tickerUpper, companyName, finalReport, 24);
 
       // Create notification
       await db.query(
         'INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)',
-        [userId, 'Research Completed', `AI report compiled successfully for ${finalReport.profile.companyName} (${tickerUpper}).`]
+        [userId, 'Research Completed', `AI report compiled successfully for ${companyName} (${tickerUpper}).`]
       );
 
       sendSSEEvent('complete', {
@@ -224,21 +288,27 @@ module.exports = {
   deleteReport: async (req, res, next) => {
     try {
       const { id } = req.params;
-      const [result] = await db.query(
-        'DELETE FROM investment_reports WHERE id = ? AND user_id = ?',
+      const [reports] = await db.query(
+        'SELECT id, history_id FROM investment_reports WHERE id = ? AND user_id = ?',
         [id, req.user.id]
       );
 
-      if (result.affectedRows === 0) {
+      if (!reports || reports.length === 0) {
         return res.status(404).json({ success: false, message: 'Report not found or unauthorized.' });
       }
 
-      return res.json({ success: true, message: 'Investment report deleted successfully.' });
+      const historyId = reports[0].history_id;
+      await db.query('DELETE FROM saved_reports WHERE user_id = ? AND report_id = ?', [req.user.id, id]);
+      await db.query('DELETE FROM investment_reports WHERE id = ? AND user_id = ?', [id, req.user.id]);
+      if (historyId) {
+        await db.query('DELETE FROM research_history WHERE id = ? AND user_id = ?', [historyId, req.user.id]);
+      }
+
+      return res.json({ success: true, message: 'Research report and history entry deleted successfully.' });
     } catch (error) {
       next(error);
     }
   },
-
   saveReport: async (req, res, next) => {
     try {
       const { report_id } = req.body;
@@ -246,23 +316,32 @@ module.exports = {
         return res.status(400).json({ success: false, message: 'report_id is required.' });
       }
 
-      // Check if report exists
-      const [reports] = await db.query('SELECT id FROM investment_reports WHERE id = ?', [report_id]);
+      const [reports] = await db.query(
+        'SELECT id FROM investment_reports WHERE id = ? AND user_id = ?',
+        [report_id, req.user.id]
+      );
       if (!reports || reports.length === 0) {
         return res.status(404).json({ success: false, message: 'Report not found.' });
       }
 
-      await db.query(
+      const [existing] = await db.query(
+        'SELECT id FROM saved_reports WHERE user_id = ? AND report_id = ?',
+        [req.user.id, report_id]
+      );
+      if (existing && existing.length > 0) {
+        return res.json({ success: true, message: 'Report is already saved.', saved_id: existing[0].id });
+      }
+
+      const [result] = await db.query(
         'INSERT INTO saved_reports (user_id, report_id) VALUES (?, ?)',
         [req.user.id, report_id]
       );
 
-      return res.json({ success: true, message: 'Report saved to dashboard library.' });
+      return res.json({ success: true, message: 'Report saved to dashboard library.', saved_id: result.insertId });
     } catch (error) {
       next(error);
     }
   },
-
   getSavedReports: async (req, res, next) => {
     try {
       const [reports] = await db.query(
@@ -293,18 +372,21 @@ module.exports = {
 
   unsaveReport: async (req, res, next) => {
     try {
-      const { id } = req.params; // report_id
-      await db.query(
-        'DELETE FROM saved_reports WHERE user_id = ? AND report_id = ?',
-        [req.user.id, id]
+      const { id } = req.params;
+      const [result] = await db.query(
+        'DELETE FROM saved_reports WHERE user_id = ? AND (id = ? OR report_id = ?)',
+        [req.user.id, id, id]
       );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ success: false, message: 'Saved report not found.' });
+      }
 
       return res.json({ success: true, message: 'Report removed from saved library.' });
     } catch (error) {
       next(error);
     }
   },
-
   // Autocomplete Suggestions API
   getSuggestions: async (req, res, next) => {
     try {

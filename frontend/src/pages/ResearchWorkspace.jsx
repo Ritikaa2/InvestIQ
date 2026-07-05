@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { API_BASE_URL, api } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -10,11 +10,18 @@ import {
   ShareIcon, 
   ClipboardIcon, 
   PrinterIcon,
+  DocumentTextIcon,
   CheckIcon,
   ArrowPathIcon
 } from '@heroicons/react/24/outline';
-import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
-import { RevenueBarChart, ProfitFCFChart, SentimentGauge, CompetitorPieChart } from '../components/ReportCharts';
+import { HeartIcon as HeartIconSolid, StarIcon } from '@heroicons/react/24/solid';
+import { 
+  RevenueBarChart, 
+  ProfitFCFChart, 
+  SentimentGauge, 
+  CompetitorPieChart,
+  FinancialPerformanceLineChart
+} from '../components/ReportCharts';
 import toast from 'react-hot-toast';
 
 const ResearchWorkspace = () => {
@@ -30,13 +37,13 @@ const ResearchWorkspace = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [steps, setSteps] = useState([
-    { id: 1, name: 'Profile Research', status: 'pending', log: 'Queueing agent request...' },
-    { id: 2, name: 'Financial Analysis', status: 'pending', log: 'Awaiting financial ingest...' },
-    { id: 3, name: 'News Intelligence', status: 'pending', log: 'Awaiting sentiment analysis...' },
-    { id: 4, name: 'Competitor Analysis', status: 'pending', log: 'Awaiting market share compare...' },
-    { id: 5, name: 'SWOT Assessment', status: 'pending', log: 'Awaiting strategic matrix...' },
-    { id: 6, name: 'Risk Evaluation', status: 'pending', log: 'Awaiting risk calculation...' },
-    { id: 7, name: 'Investment Decision', status: 'pending', log: 'Awaiting final recommendations...' }
+    { id: 1, name: 'Collecting company information', status: 'pending', log: '' },
+    { id: 2, name: 'Analyzing financial data', status: 'pending', log: '' },
+    { id: 3, name: 'Checking recent news', status: 'pending', log: '' },
+    { id: 4, name: 'Evaluating market position', status: 'pending', log: '' },
+    { id: 5, name: 'Evaluating strategic SWOT', status: 'pending', log: '' },
+    { id: 6, name: 'Assessing company risk factors', status: 'pending', log: '' },
+    { id: 7, name: 'Generating investment recommendation', status: 'pending', log: '' }
   ]);
   const [logs, setLogs] = useState([]);
   const logTerminalRef = useRef(null);
@@ -108,70 +115,96 @@ const ResearchWorkspace = () => {
         body: JSON.stringify({ ticker: searchVal })
       });
 
+      if (!response.ok) {
+        let message = `Research request failed with status ${response.status}.`;
+        try {
+          const errorPayload = await response.json();
+          message = errorPayload.message || errorPayload.errors?.[0]?.message || message;
+        } catch (parseError) {
+          // Keep default message
+        }
+        throw new Error(message);
+      }
+
       if (!response.body) throw new Error('ReadableStream not supported by browser.');
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
+      const handleEvent = (eventName, payload) => {
+        if (eventName === 'progress') {
+          const stepIdx = Math.max(0, (payload.step || 1) - 1);
+          setActiveStep(payload.step || 1);
+
+          setSteps(prev => prev.map((s, idx) => {
+            if (idx < stepIdx) return { ...s, status: 'completed' };
+            if (idx === stepIdx) return { ...s, status: payload.status || 'running', log: payload.log || '' };
+            return s;
+          }));
+
+          setLogs(prev => [...prev, `[${payload.name || 'Agent'}] ${payload.log || 'Working...'}`]);
+          return;
+        }
+
+        if (eventName === 'info') {
+          setLogs(prev => [...prev, `[Info] ${payload.message || 'Preparing research pipeline...'}`]);
+          return;
+        }
+
+        if (eventName === 'complete') {
+          setReportId(payload.reportId);
+          setReport(payload.data);
+          setSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+          setActiveStep(7);
+          setIsRunning(false);
+          toast.success('Agent research dossier compiled successfully!');
+          return;
+        }
+
+        if (eventName === 'error') {
+          setLogs(prev => [...prev, `[ERROR] ${payload.message || 'Research failed.'}`]);
+          setIsRunning(false);
+          toast.error(payload.message || 'Research failed.');
+        }
+      };
+
+      const parseChunk = (chunk) => {
+        buffer += chunk;
+        const packets = buffer.split(/\n\n|\r\n\r\n/);
+        buffer = packets.pop() || '';
+
+        packets.forEach((packet) => {
+          const lines = packet.split(/\r?\n/);
+          const eventLine = lines.find(line => line.startsWith('event:'));
+          const dataLines = lines.filter(line => line.startsWith('data:'));
+          if (dataLines.length === 0) return;
+
+          const eventName = eventLine ? eventLine.replace('event:', '').trim() : 'message';
+          const rawData = dataLines.map(line => line.replace(/^data:\s?/, '')).join('\n');
+
+          try {
+            handleEvent(eventName, JSON.parse(rawData));
+          } catch (e) {
+            console.warn('Unable to parse research stream packet:', rawData);
+          }
+        });
+      };
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop(); // keep last incomplete line
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-
-          // SSE format: event: name \n data: JSON
-          if (trimmed.startsWith('data: ')) {
-            try {
-              const payload = JSON.parse(trimmed.slice(6));
-              
-              // Handle progress events
-              if (payload.step !== undefined) {
-                const stepIdx = payload.step - 1;
-                setActiveStep(payload.step);
-
-                setSteps(prev => prev.map((s, idx) => {
-                  if (idx < stepIdx) return { ...s, status: 'completed' };
-                  if (idx === stepIdx) return { ...s, status: payload.status, log: payload.log };
-                  return s;
-                }));
-
-                setLogs(prev => [...prev, `[${payload.name}] ${payload.log}`]);
-              }
-
-              // Handle generic SSE completes
-              if (payload.reportId) {
-                setReportId(payload.reportId);
-                setReport(payload.data);
-                // Mark all steps as complete
-                setSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-                setIsRunning(false);
-                toast.success('Agent research dossier compiled successfully!');
-              }
-
-              // Handle general errors
-              if (payload.message && trimmed.includes('"error"')) {
-                setLogs(prev => [...prev, `[ERROR] ${payload.message}`]);
-                setIsRunning(false);
-                toast.error(payload.message);
-              }
-            } catch (e) {
-              // Ignore parse errors from partial buffers
-            }
-          }
-        }
+        parseChunk(decoder.decode(value, { stream: true }));
       }
-    } catch (err) {
+
+      parseChunk(decoder.decode());
+      if (buffer.trim()) {
+        parseChunk('\n\n');
+      }    } catch (err) {
       console.error(err);
       setLogs(prev => [...prev, `[CRITICAL ERROR] ${err.message}`]);
       setIsRunning(false);
-      toast.error('Connection failed during agent execution.');
+      toast.error(err.message || 'Connection failed during agent execution.');
     }
   };
 
@@ -182,7 +215,12 @@ const ResearchWorkspace = () => {
       setIsBookmarked(true);
       toast.success('Added ticker to watchlist.');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to bookmark.');
+      if (err.response?.status === 409) {
+        setIsBookmarked(true);
+        toast.success('Company is already in watchlist.');
+      } else {
+        toast.error(err.response?.data?.message || 'Failed to bookmark.');
+      }
     }
   };
 
@@ -202,35 +240,41 @@ const ResearchWorkspace = () => {
     toast.success('Report JSON copied to clipboard.');
   };
 
+  const currentLoadingPercent = Math.round((activeStep / 7) * 100);
+  const financialHistory = report?.financials?.financialHistory || [];
+  const latestFinancial = financialHistory[financialHistory.length - 1] || {};
+  const previousFinancial = financialHistory[financialHistory.length - 2] || {};
+  const growthPercent = previousFinancial.revenue
+    ? ((latestFinancial.revenue - previousFinancial.revenue) / previousFinancial.revenue) * 100
+    : 0;
+  const netMargin = latestFinancial.revenue
+    ? (latestFinancial.profit / latestFinancial.revenue) * 100
+    : 0;
+  const cashConversion = latestFinancial.profit
+    ? (latestFinancial.freeCashFlow / latestFinancial.profit) * 100
+    : 0;
+  const debtToRevenue = latestFinancial.revenue
+    ? latestFinancial.totalDebt / latestFinancial.revenue
+    : 0;
+
   return (
     <div className="space-y-6">
       
-      {/* Search inputs */}
-      {!isRunning && !report && (
-        <div className="max-w-xl mx-auto text-center py-20 space-y-6">
-          <div className="flex justify-center">
-            <div className="p-3 bg-brand-500/10 rounded-2xl text-brand-500">
-              <SparklesIcon className="w-8 h-8 animate-pulse" />
-            </div>
-          </div>
-          <div>
-            <h2 className="text-3xl font-display font-extrabold text-slate-800 dark:text-slate-100">AI Research Terminal</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">Orchestrate our multi-agent model to execute security audits.</p>
-          </div>
-
-          <div className="relative">
-            <MagnifyingGlassIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* Autocomplete Search input - ALWAYS VISIBLE */}
+      <div className="glass-panel p-4 bg-white dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl shadow-sm">
+        <div className="flex gap-3 relative max-w-3xl">
+          <div className="relative flex-grow">
+            <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
               placeholder={t('enterTicker')} 
               value={ticker}
               onChange={(e) => { setTicker(e.target.value); setShowSuggestions(true); }}
               onKeyDown={(e) => { if (e.key === 'Enter') handleRunResearch(); }}
-              className="w-full glass-input pl-12 pr-4 py-3 text-sm shadow-md"
+              className="w-full glass-input pl-10 pr-4 py-2.5 text-xs shadow-inner"
             />
-            {/* suggestions dropdown */}
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute left-0 right-0 mt-2 glass-panel p-2 shadow-lg text-left max-h-56 overflow-y-auto z-50">
+              <div className="absolute left-0 right-0 mt-2 glass-panel p-2 shadow-lg text-left max-h-56 overflow-y-auto z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850">
                 {suggestions.map((s, idx) => (
                   <button 
                     key={idx}
@@ -244,15 +288,36 @@ const ResearchWorkspace = () => {
               </div>
             )}
           </div>
+          <button 
+            onClick={() => handleRunResearch()}
+            disabled={isRunning}
+            className="bg-brand-500 hover:bg-brand-600 disabled:bg-slate-400 text-white font-semibold text-xs px-6 py-2.5 rounded-xl transition-all shadow-md shrink-0"
+          >
+            {isRunning ? 'Analyzing...' : 'Analyze'}
+          </button>
+        </div>
+      </div>
 
-          {/* Quick links shortcuts */}
+      {/* Init Empty Terminal State */}
+      {!isRunning && !report && (
+        <div className="max-w-xl mx-auto text-center py-20 space-y-6">
+          <div className="flex justify-center">
+            <div className="p-3 bg-brand-500/10 rounded-2xl text-brand-500">
+              <SparklesIcon className="w-8 h-8 animate-pulse" />
+            </div>
+          </div>
+          <div>
+            <h2 className="text-3xl font-display font-extrabold text-slate-800 dark:text-slate-100">AI Research Terminal</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">Orchestrate our multi-agent model to execute security audits.</p>
+          </div>
+
           <div className="flex flex-wrap items-center justify-center gap-2 text-xs pt-4">
             <span className="text-slate-400">Popular Tickers:</span>
-            {['AAPL', 'MSFT', 'TSLA', 'AMZN', 'NVDA'].map(t => (
+            {['AAPL', 'MSFT', 'TSLA', 'NVDA', 'TCS'].map(t => (
               <button 
                 key={t}
                 onClick={() => handleRunResearch(t)}
-                className="bg-slate-200/50 dark:bg-slate-800/50 hover:bg-brand-500/10 hover:text-brand-500 px-3 py-1 rounded-full font-mono text-[10px] font-bold border border-slate-300/30 dark:border-slate-800/30 transition-colors"
+                className="bg-slate-200/50 dark:bg-slate-800/50 hover:bg-brand-500/10 hover:text-brand-500 px-3 py-1 rounded-full font-mono text-[10px] font-bold border border-slate-300/30 dark:border-slate-800/30 transition-all"
               >
                 {t}
               </button>
@@ -261,41 +326,65 @@ const ResearchWorkspace = () => {
         </div>
       )}
 
-      {/* Running Progress node screen */}
+      {/* Running Progress loading screen */}
       {isRunning && (
-        <div className="max-w-3xl mx-auto space-y-6">
-          <div className="glass-panel p-6 border border-slate-200/50 dark:border-slate-800/50 shadow-lg">
-            <div className="flex items-center justify-between border-b border-slate-200/40 dark:border-slate-800/40 pb-4 mb-4">
-              <span className="text-xs font-semibold text-slate-400">Agent Network Orchestrator: <span className="font-mono text-brand-500">{ticker}</span></span>
-              <span className="flex items-center gap-1 text-[10px] bg-brand-500/10 text-brand-500 px-2 py-0.5 rounded-lg font-bold"><SparklesIcon className="w-3.5 h-3.5" /> Core Graph Running</span>
+        <div className="max-w-2xl mx-auto space-y-6">
+          <div className="glass-panel p-8 bg-white dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl shadow-xl space-y-6">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-250">
+                AI is analyzing {ticker || 'Company'}...
+              </h3>
             </div>
 
-            {/* Vertical Steps */}
-            <div className="space-y-4 my-6">
-              {steps.map((step) => (
-                <div key={step.id} className="flex items-start gap-4">
-                  <div className="flex flex-col items-center">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border ${
-                      step.status === 'completed' 
-                        ? 'bg-emerald-500 text-white border-emerald-500' 
-                        : (step.status === 'running' ? 'bg-brand-500 text-white border-brand-500 animate-pulse' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 border-slate-300 dark:border-slate-700')
-                    }`}>
-                      {step.status === 'completed' ? <CheckIcon className="w-4 h-4" /> : step.id}
+            {/* Progress bar */}
+            <div className="flex items-center gap-4">
+              <div className="flex-grow h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-brand-500 rounded-full transition-all duration-300"
+                  style={{ width: `${currentLoadingPercent}%` }}
+                />
+              </div>
+              <span className="text-xs font-black text-slate-600 dark:text-slate-300 shrink-0">
+                {currentLoadingPercent}%
+              </span>
+            </div>
+
+            {/* Checklist of steps */}
+            <div className="border-t border-slate-100 dark:border-slate-800/50 pt-5 space-y-3.5">
+              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Research Preview</h4>
+              
+              {steps.map((step, idx) => {
+                const isDone = activeStep > idx;
+                const isCurrent = activeStep === idx + 1;
+                
+                return (
+                  <div key={step.id} className="flex items-center justify-between text-xs font-semibold">
+                    <div className="flex items-center gap-3">
+                      {isDone ? (
+                        <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-white shrink-0">
+                          <CheckIcon className="w-3.5 h-3.5 stroke-[3]" />
+                        </div>
+                      ) : isCurrent ? (
+                        <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin shrink-0" />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border-2 border-slate-200 dark:border-slate-800 shrink-0" />
+                      )}
+                      <span className={`${isDone ? 'text-slate-800 dark:text-slate-200 font-bold' : isCurrent ? 'text-brand-500 font-bold' : 'text-slate-400 font-normal'}`}>
+                        {step.name}
+                      </span>
                     </div>
-                    {step.id < 7 && <div className="w-0.5 h-8 bg-slate-200 dark:bg-slate-800 mt-1" />}
+                    {isCurrent && (
+                      <span className="text-[9px] text-brand-500 animate-pulse font-normal italic">Processing...</span>
+                    )}
                   </div>
-                  <div>
-                    <h5 className={`text-xs font-extrabold ${step.status === 'running' ? 'text-brand-500' : 'text-slate-700 dark:text-slate-300'}`}>{step.name}</h5>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{step.log || 'Awaiting queue position...'}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          {/* Terminal Logs */}
-          <div className="glass-panel bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col h-48">
-            <span className="text-[10px] text-slate-400 font-mono border-b border-slate-800 pb-2 mb-2 uppercase tracking-widest font-bold">Live Execution Logs</span>
+          {/* Terminal logs panel */}
+          <div className="glass-panel bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col h-40">
+            <span className="text-[9px] text-slate-400 font-mono border-b border-slate-800 pb-2 mb-2 uppercase tracking-widest font-bold">Live Execution Logs</span>
             <div ref={logTerminalRef} className="flex-grow overflow-y-auto font-mono text-[9px] text-emerald-400 space-y-1.5 scrollbar-thin">
               {logs.map((log, idx) => (
                 <div key={idx} className="leading-relaxed">{log}</div>
@@ -308,85 +397,98 @@ const ResearchWorkspace = () => {
       {/* Finished report rendering */}
       {report && (
         <div className="space-y-6">
-          {/* Header metadata row */}
-          <div className="glass-panel p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 border-brand-500/10 shadow-lg">
+          
+          {/* Header Metadata */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Equity Audit Report</span>
-              <h1 className="text-3xl font-display font-extrabold text-slate-800 dark:text-slate-100 mt-1">{report.profile.companyName} <span className="font-mono text-brand-500">({report.profile.ticker})</span></h1>
-              <p className="text-xs text-slate-400 mt-1">Compiled in {steps.length > 0 ? 'Local dual-mode engine' : 'LangGraph network'}.</p>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Research Hub</span>
+              <h1 className="text-3xl font-display font-extrabold text-slate-800 dark:text-slate-100 mt-0.5">
+                {report.profile.companyName}
+              </h1>
             </div>
-
-            {/* Recommendation badge & action lists */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex flex-col items-center px-4 py-2 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
-                <span className="text-[9px] text-slate-400 font-bold uppercase">Committee Decision</span>
-                <span className={`text-xl font-black mt-0.5 ${
-                  report.decision.recommendation === 'BUY' ? 'text-emerald-500' : (report.decision.recommendation === 'HOLD' ? 'text-amber-500' : 'text-red-500')
-                }`}>{report.decision.recommendation}</span>
-              </div>
+            
+            {/* Action buttons */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={bookmarkTicker} className="icon-button" title="Favorite Company">
+                {isBookmarked ? <StarIcon className="w-5 h-5 text-amber-500" /> : <HeartIcon className="w-5 h-5 text-slate-500" />}
+              </button>
+              <button onClick={copyReportLink} className="icon-button" title="Copy report data">
+                <ClipboardIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={saveReportToDashboard}
+                disabled={isSaved}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:text-emerald-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+              >
+                <DocumentTextIcon className="w-4 h-4" />
+                {isSaved ? 'Saved' : 'Save report'}
+              </button>
               
-              {/* Actions */}
-              <div className="flex gap-1.5">
-                <button 
-                  onClick={bookmarkTicker}
-                  className="p-2.5 glass-panel hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl"
-                  title="Bookmark Company"
-                >
-                  {isBookmarked ? <HeartIconSolid className="w-5 h-5 text-pink-500" /> : <HeartIcon className="w-5 h-5" />}
-                </button>
-                <button 
-                  onClick={saveReportToDashboard}
-                  className="p-2.5 glass-panel hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl text-brand-500"
-                  disabled={isSaved}
-                  title="Save Report to Library"
-                >
-                  {isSaved ? <CheckIcon className="w-5 h-5" /> : <SparklesIcon className="w-5 h-5" />}
-                </button>
-                <a 
-                  href={`${API_BASE_URL}/report/${reportId}/pdf?token=${localStorage.getItem('token')}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="p-2.5 glass-panel hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-300"
-                  title="Download PDF Report"
-                >
-                  <ArrowDownTrayIcon className="w-5 h-5" />
-                </a>
-                <button 
-                  onClick={() => handleRunResearch(report.profile.ticker)}
-                  className="p-2.5 glass-panel hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl text-slate-400 hover:text-slate-600"
-                  title="Re-run Analysis"
-                >
-                  <ArrowPathIcon className="w-5 h-5" />
-                </button>
-              </div>
+              <a 
+                href={`${API_BASE_URL}/report/${reportId}/pdf?token=${localStorage.getItem('token')}`}
+                target="_blank"
+                rel="noreferrer"
+                className="primary-button"
+              >
+                <ArrowDownTrayIcon className="w-4 h-4" />
+                Download PDF
+              </a>
             </div>
           </div>
 
-          {/* Core score cards */}
+          {/* Top Recommendation Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="glass-panel p-5 text-center flex flex-col justify-center items-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase mb-2">Investment Score</span>
-              <div className="w-28 h-28 rounded-full border-[10px] border-slate-200 dark:border-slate-800 flex items-center justify-center relative">
-                <span className="text-3xl font-display font-black text-brand-500">{report.decision.investmentScore}</span>
-                <span className="text-[9px] text-slate-400 absolute bottom-3">/ 100</span>
-              </div>
-            </div>
             
-            <div className="glass-panel p-5 text-center flex flex-col justify-center items-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase mb-2">Confidence Level</span>
-              <div className="w-28 h-28 rounded-full border-[10px] border-slate-200 dark:border-slate-800 flex items-center justify-center relative">
-                <span className="text-3xl font-display font-black text-indigo-500">{report.decision.confidenceScore}%</span>
-                <span className="text-[9px] text-slate-400 absolute bottom-3">Certainty</span>
+            {/* Left Card: Investment Decision */}
+            <div className="glass-panel p-6 bg-white dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl shadow-sm flex flex-col justify-between min-h-[140px] md:col-span-1">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Investment Recommendation</span>
+                <div className="flex items-center gap-4 mt-3">
+                  <span className={`px-4 py-1.5 text-base font-black rounded-xl uppercase tracking-wider border ${
+                    report.decision.recommendation === 'BUY' 
+                      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' 
+                      : (report.decision.recommendation === 'HOLD' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20')
+                  }`}>
+                    {report.decision.recommendation === 'BUY' ? 'Invest' : report.decision.recommendation.toLowerCase()}
+                  </span>
+                  
+                  <div className="flex flex-col">
+                    <span className="text-xs text-slate-400 font-medium">Investment Score</span>
+                    <span className="text-lg font-black text-slate-800 dark:text-slate-100">{report.decision.investmentScore}/100</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Little Score Slider bar */}
+              <div className="w-full h-1.5 bg-slate-150 dark:bg-slate-800 rounded-full overflow-hidden mt-4">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    report.decision.investmentScore >= 80 
+                      ? 'bg-emerald-500' 
+                      : (report.decision.investmentScore >= 70 ? 'bg-amber-500' : 'bg-red-500')
+                  }`}
+                  style={{ width: `${report.decision.investmentScore}%` }}
+                />
               </div>
             </div>
 
-            <div className="glass-panel p-5 flex flex-col justify-between">
+            {/* Right Card: Key Highlights */}
+            <div className="glass-panel p-6 bg-white dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl shadow-sm flex flex-col justify-between md:col-span-2">
               <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase">News Sentiment</span>
-                <h4 className="text-xl font-bold text-slate-800 dark:text-slate-200 mt-1">{report.news.overallSentiment}</h4>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3">Key Highlights</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-semibold text-slate-700 dark:text-slate-350">
+                  {(report.decision.coreRationale || []).map((highlight, idx) => (
+                    <div key={idx} className="flex items-start gap-2">
+                      <div className="w-4 h-4 rounded-full bg-brand-50 flex items-center justify-center text-brand-500 mt-0.5 shrink-0">
+                        <CheckIcon className="w-3 h-3 stroke-[3]" />
+                      </div>
+                      <span className="leading-snug">{highlight}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <SentimentGauge score={report.news.sentimentScore || 75} />
             </div>
+
           </div>
 
           {/* Navigation tabs */}
@@ -394,9 +496,12 @@ const ResearchWorkspace = () => {
             {[
               { id: 'overview', name: 'Overview' },
               { id: 'financials', name: 'Financials' },
-              { id: 'swot', name: 'SWOT Map' },
-              { id: 'competitors', name: 'Competitors' },
-              { id: 'risks', name: 'Risk Assessment' }
+              { id: 'swot', name: 'SWOT' },
+              { id: 'news', name: 'News' },
+              { id: 'risks', name: 'Risks' },
+              { id: 'opportunities', name: 'Opportunities' },
+              { id: 'reasoning', name: 'AI Reasoning' },
+              { id: 'investment_guide', name: 'Investment Guide' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -412,32 +517,63 @@ const ResearchWorkspace = () => {
             ))}
           </div>
 
-          {/* Tab contents */}
-          <div className="glass-panel p-6 min-h-80 shadow-md">
+          {/* Tab contents panel */}
+          <div className="glass-panel p-6 bg-white dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl shadow-sm min-h-60">
             
             {/* Overview */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
                 <div>
-                  <h4 className="font-bold text-sm mb-2 text-slate-800 dark:text-slate-100">Business Model overview</h4>
+                  <h4 className="font-bold text-sm mb-2 text-slate-800 dark:text-slate-100">Company Overview</h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{report.profile.overview || report.profile.description}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-6 border-t border-slate-200/30 dark:border-slate-800/30 pt-6">
+                
+                {/* Financial summary blocks */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-slate-100 dark:border-slate-850 pt-5">
+                  <div className="p-3 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Revenue</span>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 block mt-1">
+                      ${((latestFinancial.revenue || 0) / 1e9).toFixed(2)}B
+                    </span>
+                    <span className="text-[8px] text-emerald-500 font-bold block mt-0.5">↑ {growthPercent.toFixed(1)}%</span>
+                  </div>
+                  <div className="p-3 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Net Income</span>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 block mt-1">
+                      ${((latestFinancial.profit || 0) / 1e9).toFixed(2)}B
+                    </span>
+                    <span className="text-[8px] text-emerald-500 font-bold block mt-0.5">↑ {netMargin.toFixed(1)}%</span>
+                  </div>
+                  <div className="p-3 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Market Capitalization</span>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 block mt-1">
+                      ${(report.financials.marketCap / 1e12).toFixed(2)}T
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">P/E Ratio</span>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 block mt-1">
+                      {report.financials.peRatio?.toFixed(1) || '28.5'}x
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6 border-t border-slate-100 dark:border-slate-850 pt-5 text-xs font-semibold text-slate-700 dark:text-slate-350">
                   <div>
-                    <h5 className="font-bold text-xs text-slate-400 uppercase">Headquarters</h5>
-                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 block mt-1">{report.profile.headquarters || 'N/A'}</span>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Headquarters</span>
+                    <span className="block mt-1 font-bold">{report.profile.headquarters || 'N/A'}</span>
                   </div>
                   <div>
-                    <h5 className="font-bold text-xs text-slate-400 uppercase">Chief Executive Officer (CEO)</h5>
-                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 block mt-1">{report.profile.ceo || 'N/A'}</span>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">CEO</span>
+                    <span className="block mt-1 font-bold">{report.profile.ceo || 'N/A'}</span>
                   </div>
                   <div>
-                    <h5 className="font-bold text-xs text-slate-400 uppercase">Primary Sector</h5>
-                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 block mt-1">{report.profile.sector || 'N/A'}</span>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Industry</span>
+                    <span className="block mt-1 font-bold">{report.profile.industry || 'N/A'}</span>
                   </div>
                   <div>
-                    <h5 className="font-bold text-xs text-slate-400 uppercase">Industry Class</h5>
-                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 block mt-1">{report.profile.industry || 'N/A'}</span>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Sector</span>
+                    <span className="block mt-1 font-bold">{report.profile.sector || 'N/A'}</span>
                   </div>
                 </div>
               </div>
@@ -446,19 +582,44 @@ const ResearchWorkspace = () => {
             {/* Financials */}
             {activeTab === 'financials' && (
               <div className="space-y-6">
+                <div>
+                  <p className="page-eyebrow">Financial intelligence</p>
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <h4 className="text-lg font-display font-bold text-slate-900 dark:text-white">Performance & cash quality</h4>
+                      <p className="text-xs text-slate-500">A decision-ready view of growth, profitability, cash conversion, and leverage.</p>
+                    </div>
+                    <span className="text-[10px] font-semibold text-slate-400">Latest fiscal year: {latestFinancial.year || '—'}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Revenue growth', value: growthPercent.toFixed(1) + '%', tone: growthPercent >= 0 ? 'text-emerald-600' : 'text-red-500', note: 'year over year' },
+                    { label: 'Net margin', value: netMargin.toFixed(1) + '%', tone: 'text-blue-600', note: 'profit efficiency' },
+                    { label: 'Cash conversion', value: cashConversion.toFixed(0) + '%', tone: 'text-violet-600', note: 'FCF / net income' },
+                    { label: 'Debt / revenue', value: debtToRevenue.toFixed(2) + 'x', tone: debtToRevenue < 0.5 ? 'text-emerald-600' : 'text-amber-600', note: 'balance-sheet load' }
+                  ].map((metric) => (
+                    <div key={metric.label} className="soft-card p-4">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{metric.label}</span>
+                      <div className={'mt-2 text-2xl font-display font-extrabold ' + metric.tone}>{metric.value}</div>
+                      <span className="mt-1 block text-[10px] text-slate-400">{metric.note}</span>
+                    </div>
+                  ))}
+                </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div>
                     <h5 className="font-bold text-xs mb-3 text-slate-500 uppercase">Revenue Growth Trend</h5>
-                    <RevenueBarChart data={report.financials.financialHistory} />
+                    <RevenueBarChart data={financialHistory} />
                   </div>
                   <div>
                     <h5 className="font-bold text-xs mb-3 text-slate-500 uppercase">Profit & Free Cash Flow</h5>
-                    <ProfitFCFChart data={report.financials.financialHistory} />
+                    <ProfitFCFChart data={financialHistory} />
                   </div>
                 </div>
 
                 {/* Data Table */}
-                <div className="border-t border-slate-200/30 dark:border-slate-800/30 pt-6">
+                <div className="border-t border-slate-100 dark:border-slate-850 pt-6">
                   <h4 className="font-bold text-xs text-slate-500 uppercase mb-3">Historical Reports Table</h4>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">
@@ -472,13 +633,13 @@ const ResearchWorkspace = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {report.financials.financialHistory.map((row, idx) => (
+                        {financialHistory.map((row, idx) => (
                           <tr key={idx} className="border-b border-slate-100/50 dark:border-slate-800/20">
                             <td className="py-2.5 font-bold font-mono">{row.year}</td>
-                            <td className="py-2.5 text-slate-600 dark:text-slate-300">${(row.revenue / 1e9).toFixed(2)}B</td>
-                            <td className="py-2.5 text-slate-600 dark:text-slate-300">${(row.profit / 1e9).toFixed(2)}B</td>
-                            <td className="py-2.5 text-slate-600 dark:text-slate-300">${(row.freeCashFlow / 1e9).toFixed(2)}B</td>
-                            <td className="py-2.5 text-slate-600 dark:text-slate-300">${(row.totalDebt / 1e9).toFixed(2)}B</td>
+                            <td className="py-2.5 text-slate-650 dark:text-slate-350">${(row.revenue / 1e9).toFixed(2)}B</td>
+                            <td className="py-2.5 text-slate-650 dark:text-slate-350">${(row.profit / 1e9).toFixed(2)}B</td>
+                            <td className="py-2.5 text-slate-650 dark:text-slate-350">${(row.freeCashFlow / 1e9).toFixed(2)}B</td>
+                            <td className="py-2.5 text-slate-650 dark:text-slate-350">${(row.totalDebt / 1e9).toFixed(2)}B</td>
                           </tr>
                         ))}
                       </tbody>
@@ -521,48 +682,30 @@ const ResearchWorkspace = () => {
               </div>
             )}
 
-            {/* Competitors */}
-            {activeTab === 'competitors' && (
+            {/* News */}
+            {activeTab === 'news' && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div>
-                    <h5 className="font-bold text-xs text-slate-500 uppercase mb-3">Peers Market Share Summary</h5>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">{report.competitors.marketShareSummary}</p>
-                    <CompetitorPieChart competitors={report.competitors.competitors} />
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                  <div className="shrink-0 w-44">
+                    <SentimentGauge score={report.news.sentimentScore || 75} />
                   </div>
                   <div>
-                    <h5 className="font-bold text-xs text-slate-500 uppercase mb-3">Competitive Advantage Analysis</h5>
-                    <div className="space-y-3">
-                      {report.competitors.competitors.map((c, idx) => (
-                        <div key={idx} className="p-3 bg-slate-100/50 dark:bg-slate-900/40 rounded-xl border border-slate-200/20 dark:border-slate-800/20">
-                          <h6 className="font-bold text-xs text-slate-700 dark:text-slate-200">{c.name} (Share: {c.marketShareEstimated})</h6>
-                          <div className="grid grid-cols-2 gap-3 mt-1.5 text-[10px]">
-                            <div>
-                              <span className="text-slate-400">Moat:</span>
-                              <span className="text-emerald-500 block font-semibold">{c.keyAdvantage}</span>
-                            </div>
-                            <div>
-                              <span className="text-slate-400">Weakness:</span>
-                              <span className="text-red-500 block font-semibold">{c.keyDisadvantage}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <h5 className="font-bold text-xs text-slate-500 uppercase mb-2">Headline Sentiment Summary</h5>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{report.news.summary}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-200/30 dark:border-slate-800/30 pt-6">
-                  <div>
-                    <h5 className="font-bold text-xs text-emerald-600 uppercase mb-2">Our Advantages</h5>
-                    <ul className="space-y-1">
-                      {report.competitors.clientAdvantages.map((a, i) => <li key={i} className="text-xs text-slate-500 dark:text-slate-400">- {a}</li>)}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-850 pt-5">
+                  <div className="p-4 bg-emerald-500/10 dark:bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                    <h6 className="font-bold text-xs text-emerald-600 dark:text-emerald-400 uppercase mb-2">Bullish Catalysts</h6>
+                    <ul className="space-y-1.5 text-xs text-slate-650 dark:text-slate-300">
+                      {report.news.bullishCatalysts.map((cat, i) => <li key={i}>- {cat}</li>)}
                     </ul>
                   </div>
-                  <div>
-                    <h5 className="font-bold text-xs text-red-600 uppercase mb-2">Our Vulnerabilities</h5>
-                    <ul className="space-y-1">
-                      {report.competitors.clientDisadvantages.map((d, i) => <li key={i} className="text-xs text-slate-500 dark:text-slate-400">- {d}</li>)}
+                  <div className="p-4 bg-red-500/10 dark:bg-red-500/5 border border-red-500/10 rounded-xl">
+                    <h6 className="font-bold text-xs text-red-600 dark:text-red-400 uppercase mb-2">Bearish Catalysts</h6>
+                    <ul className="space-y-1.5 text-xs text-slate-650 dark:text-slate-300">
+                      {report.news.bearishCatalysts.map((cat, i) => <li key={i}>- {cat}</li>)}
                     </ul>
                   </div>
                 </div>
@@ -573,37 +716,182 @@ const ResearchWorkspace = () => {
             {activeTab === 'risks' && (
               <div className="space-y-6">
                 <div>
-                  <h4 className="font-bold text-sm mb-3 text-slate-800 dark:text-slate-100">Audit Risk Matrix</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Synthesized risk rating category: <span className="font-bold text-brand-500">{report.risks.riskRating}</span></p>
+                  <h4 className="font-bold text-sm mb-1 text-slate-800 dark:text-slate-100">Audit Risk Matrix</h4>
+                  <p className="text-xs text-slate-400">Synthesized risk rating: <span className="font-bold text-brand-500">{report.risks.riskRating}</span></p>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="p-4 bg-slate-100/50 dark:bg-slate-900/20 border border-slate-200/50 dark:border-slate-800/50 rounded-xl space-y-2">
-                    <h5 className="font-bold text-xs text-slate-600 dark:text-slate-300 uppercase">Business Risks</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div className="p-4 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl space-y-1.5">
+                    <h5 className="font-bold text-slate-600 dark:text-slate-300 uppercase text-[10px]">Business Risks</h5>
                     <ul className="space-y-1">
-                      {report.risks.businessRisks.map((r, i) => <li key={i} className="text-xs text-slate-500 dark:text-slate-400">- {r}</li>)}
+                      {report.risks.businessRisks.map((r, i) => <li key={i} className="text-slate-500 dark:text-slate-400">- {r}</li>)}
                     </ul>
                   </div>
 
-                  <div className="p-4 bg-slate-100/50 dark:bg-slate-900/20 border border-slate-200/50 dark:border-slate-800/50 rounded-xl space-y-2">
-                    <h5 className="font-bold text-xs text-slate-600 dark:text-slate-300 uppercase">Political / Regulatory</h5>
+                  <div className="p-4 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl space-y-1.5">
+                    <h5 className="font-bold text-slate-600 dark:text-slate-300 uppercase text-[10px]">Political / Regulatory</h5>
                     <ul className="space-y-1">
-                      {report.risks.politicalRisks.map((r, i) => <li key={i} className="text-xs text-slate-500 dark:text-slate-400">- {r}</li>)}
+                      {report.risks.politicalRisks.map((r, i) => <li key={i} className="text-slate-500 dark:text-slate-400">- {r}</li>)}
                     </ul>
                   </div>
 
-                  <div className="p-4 bg-slate-100/50 dark:bg-slate-900/20 border border-slate-200/50 dark:border-slate-800/50 rounded-xl space-y-2">
-                    <h5 className="font-bold text-xs text-slate-600 dark:text-slate-300 uppercase">Macro-Economic</h5>
+                  <div className="p-4 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl space-y-1.5">
+                    <h5 className="font-bold text-slate-600 dark:text-slate-300 uppercase text-[10px]">Macro-Economic</h5>
                     <ul className="space-y-1">
-                      {report.risks.economicRisks.map((r, i) => <li key={i} className="text-xs text-slate-500 dark:text-slate-400">- {r}</li>)}
+                      {report.risks.economicRisks.map((r, i) => <li key={i} className="text-slate-500 dark:text-slate-400">- {r}</li>)}
                     </ul>
                   </div>
 
-                  <div className="p-4 bg-slate-100/50 dark:bg-slate-900/20 border border-slate-200/50 dark:border-slate-800/50 rounded-xl space-y-2">
-                    <h5 className="font-bold text-xs text-slate-600 dark:text-slate-300 uppercase">Technology / Cyber</h5>
+                  <div className="p-4 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl space-y-1.5">
+                    <h5 className="font-bold text-slate-600 dark:text-slate-300 uppercase text-[10px]">Technology / Cyber</h5>
                     <ul className="space-y-1">
-                      {report.risks.technologyRisks.map((r, i) => <li key={i} className="text-xs text-slate-500 dark:text-slate-400">- {r}</li>)}
+                      {report.risks.technologyRisks.map((r, i) => <li key={i} className="text-slate-500 dark:text-slate-400">- {r}</li>)}
                     </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Opportunities */}
+            {activeTab === 'opportunities' && (
+              <div className="space-y-4">
+                <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 pb-2 border-b border-slate-100 dark:border-slate-800">Growth Opportunities</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {report.swot.opportunities.map((opp, idx) => (
+                    <div key={idx} className="p-4 border border-slate-100 dark:border-slate-800/60 bg-slate-50/30 dark:bg-slate-950/10 rounded-xl">
+                      <span className="text-[10px] font-bold text-brand-500 uppercase block mb-1">Opportunity 0{idx+1}</span>
+                      <p className="text-xs text-slate-600 dark:text-slate-350 font-medium leading-relaxed">{opp}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI Reasoning */}
+            {activeTab === 'reasoning' && (
+              <div className="space-y-5">
+                <div>
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">Committee Rationale Summary</h4>
+                  <p className="text-[10px] text-slate-400">Direct rationale compiled from security audit variables.</p>
+                </div>
+                <ul className="space-y-2 text-xs text-slate-600 dark:text-slate-300 list-disc pl-5">
+                  {report.decision.coreRationale.map((rat, i) => <li key={i} className="leading-relaxed font-medium">{rat}</li>)}
+                </ul>
+                <div className="border-t border-slate-100 dark:border-slate-850 pt-4">
+                  <h5 className="font-bold text-xs text-slate-700 dark:text-slate-200 uppercase tracking-wide">Executive Dossier Summary</h5>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-2 italic font-medium">"{report.decision.aiSummary}"</p>
+                </div>
+              </div>
+            )}
+
+            {/* Investment Guide */}
+            {activeTab === 'investment_guide' && (
+              <div className="space-y-6">
+                <div>
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 pb-2 border-b border-slate-100 dark:border-slate-800">
+                    Investment Guide & Strategy
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                    Customized execution strategy based on the multi-agent equity audit for <strong>{report.profile.companyName} ({report.profile.ticker})</strong>.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                  {/* Step-by-Step Investment execution */}
+                  <div className="p-4 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl space-y-4">
+                    <h5 className="font-bold text-slate-700 dark:text-slate-200 uppercase text-[10px] tracking-wider">
+                      How to Invest (Execution Checklist)
+                    </h5>
+                    <ol className="space-y-3 list-decimal pl-4 text-slate-600 dark:text-slate-350 leading-relaxed font-semibold">
+                      <li>
+                        <strong>Select Brokerage Account:</strong> Sign in or register with a verified brokerage platform (e.g., Robinhood, Fidelity, Interactive Brokers, E*TRADE).
+                      </li>
+                      <li>
+                        <strong>Determine Order Type:</strong> Use a <em>Limit Order</em> to specify your desired entry price, rather than a Market Order, to protect against market spread.
+                      </li>
+                      <li>
+                        <strong>Risk-Averse Sizing:</strong> We recommend a <strong>Dollar-Cost Averaging (DCA)</strong> approach, splitting your capital into 3-4 tranches over 2-3 months to mitigate timing risk.
+                      </li>
+                      <li>
+                        <strong>Define Stop-Loss Limits:</strong> Set a trailing stop-loss of 10% to 15% below your average cost basis to protect your downside from unforeseen market volatility.
+                      </li>
+                    </ol>
+                  </div>
+
+                  {/* Portfolio allocation recommendations */}
+                  <div className="p-4 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl space-y-4 flex flex-col justify-between">
+                    <div>
+                      <h5 className="font-bold text-slate-700 dark:text-slate-200 uppercase text-[10px] tracking-wider mb-3">
+                        Model Allocation Strategy
+                      </h5>
+                      <div className="space-y-2 text-slate-600 dark:text-slate-350 leading-relaxed font-semibold">
+                        <p>
+                          <strong>Recommendation Class:</strong> <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                            report.decision.recommendation === 'BUY' 
+                              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                              : (report.decision.recommendation === 'HOLD' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20')
+                          }`}>{report.decision.recommendation}</span>
+                        </p>
+                        <p>
+                          <strong>Suggested Portfolio Weight:</strong> {report.decision.investmentScore >= 80 ? '4% - 5%' : (report.decision.investmentScore >= 70 ? '2% - 3%' : '0% - 1%')} of total equity portfolio.
+                        </p>
+                        <p>
+                          <strong>Hold Horizon:</strong> Medium to Long Term (12 to 36 months) to allow structural moats and AI expansions to materialize.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="p-3 bg-brand-500/5 border border-brand-500/10 rounded-xl">
+                      <span className="text-[10px] font-bold text-brand-600 dark:text-brand-400 block mb-1">AUDIT SUMMARY NOTE</span>
+                      <p className="text-[10px] text-slate-450 dark:text-slate-400 font-medium leading-relaxed">
+                        This report is synthesized via multi-agent state evaluations. Past performance is not indicative of future returns. Invest responsibly.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Elaborate each feature of the system */}
+                <div className="border-t border-slate-100 dark:border-slate-850 pt-5 space-y-3">
+                  <h5 className="font-bold text-slate-700 dark:text-slate-200 uppercase text-[10px] tracking-wider">
+                    Detailed Feature Guide (How It Works)
+                  </h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-semibold text-slate-650 dark:text-slate-350">
+                    <div className="p-3 bg-slate-50/30 dark:bg-slate-950/10 rounded-xl">
+                      <span className="font-bold text-brand-500 block mb-1">1. Investment Score</span>
+                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                        An aggregated health score (0-100) combining fundamental balance sheets, P/E multiples, strategic SWOT, and peer moats.
+                      </p>
+                    </div>
+                    <div className="p-3 bg-slate-50/30 dark:bg-slate-950/10 rounded-xl">
+                      <span className="font-bold text-brand-500 block mb-1">2. Confidence Level</span>
+                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                        Represents model mathematical certainty based on dataset completeness, news sentiment convergence, and risk matrix parameters.
+                      </p>
+                    </div>
+                    <div className="p-3 bg-slate-50/30 dark:bg-slate-950/10 rounded-xl">
+                      <span className="font-bold text-brand-500 block mb-1">3. News Sentiment</span>
+                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                        Natural language processing of recent global press releases and headlines, identifying active bullish and bearish catalysts.
+                      </p>
+                    </div>
+                    <div className="p-3 bg-slate-50/30 dark:bg-slate-950/10 rounded-xl">
+                      <span className="font-bold text-brand-500 block mb-1">4. SWOT Map</span>
+                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                        Identifies internal Strengths & Weaknesses against external Opportunities & Threats to chart long-term strategic viability.
+                      </p>
+                    </div>
+                    <div className="p-3 bg-slate-50/30 dark:bg-slate-950/10 rounded-xl">
+                      <span className="font-bold text-brand-500 block mb-1">5. Competitor Matrix</span>
+                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                        Compares estimated market shares, advantages, and system vulnerabilities against industry peers to estimate economic moats.
+                      </p>
+                    </div>
+                    <div className="p-3 bg-slate-50/30 dark:bg-slate-950/10 rounded-xl">
+                      <span className="font-bold text-brand-500 block mb-1">6. Risk Meter</span>
+                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                        A synthesized threat rating compiled across Business, Cyber, Regulatory, and Macro-Economic threat dimensions.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -611,20 +899,40 @@ const ResearchWorkspace = () => {
 
           </div>
 
-          {/* Committee Rationale & AI summary */}
-          <div className="glass-panel p-6 border-slate-200/50 dark:border-slate-800/50 space-y-4">
-            <div>
-              <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">Committee Justification Rationale</h4>
-              <p className="text-[10px] text-slate-400">Direct rationale compiled from security variables.</p>
+          {/* Side-by-side permanent visual charts: Financial Performance & Risk Meter */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Financial Performance Line Chart */}
+            <div className="lg:col-span-2 glass-panel p-6 bg-white dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl shadow-sm">
+              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">Financial Performance</h4>
+              <p className="text-[10px] text-slate-400 mb-4">Revenue and Net Income trends over the last 5 years.</p>
+              <FinancialPerformanceLineChart data={financialHistory} />
             </div>
-            <ul className="space-y-2 text-xs text-slate-600 dark:text-slate-300 list-disc pl-5">
-              {report.decision.coreRationale.map((rat, i) => <li key={i} className="leading-relaxed">{rat}</li>)}
-            </ul>
-            <div className="border-t border-slate-200/30 dark:border-slate-800/30 pt-4 mt-4">
-              <h5 className="font-bold text-xs text-slate-700 dark:text-slate-200">Executive Dossier Summary</h5>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-2 italic">"{report.decision.aiSummary}"</p>
+
+            {/* Risk Meter half-gauge */}
+            <div className="glass-panel p-6 bg-white dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl shadow-sm flex flex-col justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">Risk Meter</h4>
+                <p className="text-[10px] text-slate-400 mb-4">Synthesized threat auditing meter.</p>
+              </div>
+              <div className="flex-grow flex items-center justify-center">
+                <SentimentGauge score={report.risks.riskRating === 'Low' ? 85 : (report.risks.riskRating === 'Medium' ? 50 : 20)} />
+              </div>
             </div>
+
           </div>
+
+          {/* AI Reasoning Rationale Panel */}
+          <div className="glass-panel p-6 bg-white dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl shadow-sm space-y-4">
+            <div>
+              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">AI Reasoning</h4>
+              <p className="text-[10px] text-slate-400">Core recommendations and auditing justification.</p>
+            </div>
+            <p className="text-xs text-slate-650 dark:text-slate-350 leading-relaxed font-semibold">
+              {report.decision.aiSummary}
+            </p>
+          </div>
+
         </div>
       )}
 
@@ -633,6 +941,3 @@ const ResearchWorkspace = () => {
 };
 
 export default ResearchWorkspace;
-
-
-

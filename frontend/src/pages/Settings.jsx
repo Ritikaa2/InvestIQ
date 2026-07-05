@@ -1,94 +1,96 @@
-﻿import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_ORIGIN, useAuth, api } from '../context/AuthContext';
+import { useAuth, api } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
-import { useForm } from 'react-hook-form';
+import { Switch } from '@headlessui/react';
 import { 
-  Cog6ToothIcon, 
-  TrashIcon, 
-  LockClosedIcon, 
-  UserIcon, 
-  BellIcon,
-  PaintBrushIcon
+  PaintBrushIcon, 
+  CpuChipIcon, 
+  BellIcon, 
+  GlobeAltIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
 const Settings = () => {
-  const { user, updateProfile, logout } = useAuth();
+  const { logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { locale, setLocale, t } = useLanguage();
   const navigate = useNavigate();
 
-  const [savingSettings, setSavingSettings] = useState(false);
-  const [updatingPassword, setUpdatingPassword] = useState(false);
-  const [avatarFile, setAvatarFile] = useState(null);
-  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [selectedModel, setSelectedModel] = useState('gemini');
+  const [isSaving, setIsSaving] = useState(false);
 
-  const { register: passRegister, handleSubmit: handlePassSubmit, reset: resetPass, formState: { errors: passErrors } } = useForm();
+  // Load existing settings on page mount
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await api.get('/profile');
+        if (response.data.success && response.data.settings) {
+          const s = response.data.settings;
+          setNotificationsEnabled(Boolean(s.notifications_enabled));
+          setSelectedModel(s.ai_model || 'gemini');
+        }
+      } catch (err) {
+        console.error('Failed to load user settings preferences:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSettings();
+  }, []);
 
-  const handleAvatarChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setAvatarFile(file);
-      setAvatarPreview(URL.createObjectURL(file));
-    }
-  };
-
-  const handleProfileUpdate = async (e) => {
-    e.preventDefault();
-    const username = e.target.username.value;
-    
-    const formData = new FormData();
-    if (username) formData.append('username', username);
-    if (avatarFile) formData.append('avatar', avatarFile);
-
-    const success = await updateProfile(formData);
-    if (success) {
-      setAvatarFile(null);
-      setAvatarPreview(null);
-    }
-  };
-
-  const handleSavePreferences = async (e) => {
-    e.preventDefault();
-    setSavingSettings(true);
-    const notifications_enabled = e.target.notifications.checked;
-    
+  const handleSaveSettings = async (newTheme, newLocale, newNotifs, newModel) => {
+    setIsSaving(true);
     try {
       const response = await api.put('/settings', {
-        theme,
-        language: locale,
-        notifications_enabled
+        theme: newTheme || theme,
+        language: newLocale || locale,
+        notifications_enabled: newNotifs !== undefined ? newNotifs : notificationsEnabled,
+        ai_model: newModel || selectedModel
       });
       if (response.data.success) {
-        toast.success(response.data.message);
+        toast.success('Preferences saved successfully.');
       }
     } catch (err) {
-      toast.error('Failed to update settings preferences.');
+      toast.error('Failed to save settings.');
     } finally {
-      setSavingSettings(false);
+      setIsSaving(false);
     }
   };
 
-  const changePassword = async (data) => {
-    setUpdatingPassword(true);
-    try {
-      const response = await api.put('/profile', { password: data.newPassword });
-      if (response.data.success) {
-        toast.success('Password updated successfully.');
-        resetPass();
-      }
-    } catch (err) {
-      toast.error('Failed to update password.');
-    } finally {
-      setUpdatingPassword(false);
-    }
+  const toggleDarkMode = (enabled) => {
+    const nextTheme = enabled ? 'dark' : 'light';
+    setTheme(nextTheme);
+    handleSaveSettings(nextTheme, locale, notificationsEnabled, selectedModel);
   };
 
-  const deleteAccount = async () => {
-    if (!window.confirm('WARNING: Deleting your account will permanently remove all search history, saved reports, and watchlist bookmarks. This action CANNOT be undone. Proceed?')) return;
-    
+  const handleLanguageChange = (e) => {
+    const nextLocale = e.target.value;
+    setLocale(nextLocale);
+    handleSaveSettings(theme, nextLocale, notificationsEnabled, selectedModel);
+  };
+
+  const handleModelChange = (e) => {
+    const nextModel = e.target.value;
+    setSelectedModel(nextModel);
+    handleSaveSettings(theme, locale, notificationsEnabled, nextModel);
+  };
+
+  const toggleNotifications = (enabled) => {
+    setNotificationsEnabled(enabled);
+    handleSaveSettings(theme, locale, enabled, selectedModel);
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirm = window.confirm(
+      'WARNING: Deleting your account is permanent. All historical reports, credentials, and watchlist bookmarks will be destroyed. This action CANNOT be undone. Proceed?'
+    );
+    if (!confirm) return;
+
     try {
       const response = await api.delete('/settings/delete-account');
       if (response.data.success) {
@@ -101,140 +103,158 @@ const Settings = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="space-y-6 max-w-4xl mx-auto">
+        <div className="h-10 w-48 skeleton-shimmer rounded-xl" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="h-64 glass-panel skeleton-shimmer rounded-2xl" />
+          <div className="h-64 glass-panel skeleton-shimmer rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto space-y-6">
       
       {/* Title */}
       <div>
-        <h2 className="text-3xl font-display font-extrabold text-slate-800 dark:text-slate-100">{t('settings')}</h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400">Configure theme, language translations, and manage profile security details.</p>
+        <h2 className="text-3xl font-display font-extrabold text-slate-800 dark:text-slate-100">
+          {t('settings')}
+        </h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          Configure preferences, change AI models, manage notification triggers, and set platform rules.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* Left Side Profile Card */}
-        <div className="md:col-span-1 glass-panel p-5 text-center flex flex-col items-center justify-between h-fit">
-          <div className="w-full flex flex-col items-center">
-            <div className="relative mb-4">
-              <img 
-                src={avatarPreview || (user?.avatar_url?.startsWith('/') ? `${API_ORIGIN}${user.avatar_url}` : user?.avatar_url)} 
-                alt="avatar" 
-                className="w-24 h-24 rounded-full object-cover ring-4 ring-brand-500/20"
-              />
-              <label className="absolute bottom-0 right-0 p-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-full cursor-pointer shadow-md">
-                <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
-                <Cog6ToothIcon className="w-4 h-4" />
-              </label>
-            </div>
-            <h3 className="font-extrabold text-sm text-slate-800 dark:text-slate-100">{user?.username}</h3>
-            <span className="text-[10px] text-slate-400">{user?.email}</span>
+        {/* Appearance Settings Panel */}
+        <div className="glass-panel p-6 space-y-6 bg-white dark:bg-slate-900/60 shadow-lg border border-slate-200/50 dark:border-slate-800/40 rounded-2xl">
+          <div>
+            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-1">
+              <PaintBrushIcon className="w-5 h-5 text-brand-500" />
+              Appearance
+            </h3>
+            <p className="text-[10px] text-slate-400">Configure visual themes and display states.</p>
           </div>
 
-          <form onSubmit={handleProfileUpdate} className="w-full mt-6 space-y-3.5 text-left">
+          <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-850 pt-4">
             <div>
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Modify Username</label>
-              <input type="text" name="username" defaultValue={user?.username} className="w-full glass-input px-3 py-1.5 text-xs" />
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-250 block">Dark Mode</span>
+              <span className="text-[10px] text-slate-400">Enable dark premium theme styling</span>
             </div>
-            {(avatarFile || avatarPreview) && (
-              <div className="text-[10px] text-brand-500 font-semibold italic text-center">New avatar image staged for upload.</div>
-            )}
-            <button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold py-2 rounded-xl transition-all shadow-md">
-              Save Profile Details
-            </button>
-          </form>
+            <Switch
+              checked={theme === 'dark'}
+              onChange={toggleDarkMode}
+              className={`${
+                theme === 'dark' ? 'bg-brand-500' : 'bg-slate-200 dark:bg-slate-700'
+              } relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none`}
+            >
+              <span
+                className={`${
+                  theme === 'dark' ? 'translate-x-5' : 'translate-x-0'
+                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+              />
+            </Switch>
+          </div>
         </div>
 
-        {/* Right Side config boxes */}
-        <div className="md:col-span-2 space-y-6">
-          
-          {/* Preferences Settings */}
-          <div className="glass-panel p-5">
-            <h4 className="font-bold text-sm mb-4 flex items-center gap-2"><PaintBrushIcon className="w-5 h-5 text-brand-500" /> Preferences</h4>
-            <form onSubmit={handleSavePreferences} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Interface Theme</label>
-                  <select 
-                    value={theme}
-                    onChange={(e) => setTheme(e.target.value)}
-                    className="w-full glass-input px-3 py-1.5 text-xs cursor-pointer"
-                  >
-                    <option value="dark" className="dark:bg-slate-900 text-slate-800 dark:text-slate-200">Dark Premium Theme</option>
-                    <option value="light" className="dark:bg-slate-900 text-slate-800 dark:text-slate-200">Light Clean Theme</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">System Language</label>
-                  <select 
-                    value={locale}
-                    onChange={(e) => setLocale(e.target.value)}
-                    className="w-full glass-input px-3 py-1.5 text-xs cursor-pointer"
-                  >
-                    <option value="en" className="dark:bg-slate-900 text-slate-800 dark:text-slate-200">English (EN)</option>
-                    <option value="es" className="dark:bg-slate-900 text-slate-800 dark:text-slate-200">EspaÃ±ol (ES)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 border-t border-slate-200/30 dark:border-slate-800/30 pt-3">
-                <input 
-                  type="checkbox" 
-                  id="notifications" 
-                  defaultChecked={true}
-                  className="rounded border-slate-300 text-brand-500 focus:ring-brand-500/20"
-                />
-                <label htmlFor="notifications" className="font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1"><BellIcon className="w-4 h-4" /> Enable system audit notifications</label>
-              </div>
-
-              <button type="submit" disabled={savingSettings} className="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-4 py-2 rounded-xl text-xs shadow-md transition-all">
-                {savingSettings ? 'Saving...' : 'Save Preferences'}
-              </button>
-            </form>
+        {/* AI Model Selection Panel */}
+        <div className="glass-panel p-6 space-y-6 bg-white dark:bg-slate-900/60 shadow-lg border border-slate-200/50 dark:border-slate-800/40 rounded-2xl">
+          <div>
+            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-1">
+              <CpuChipIcon className="w-5 h-5 text-indigo-500" />
+              AI Model
+            </h3>
+            <p className="text-[10px] text-slate-400">Choose the cognitive model driving report synthesis.</p>
           </div>
 
-          {/* Change Password */}
-          <div className="glass-panel p-5">
-            <h4 className="font-bold text-sm mb-4 flex items-center gap-2"><LockClosedIcon className="w-5 h-5 text-indigo-500" /> Security Credentials</h4>
-            <form onSubmit={handlePassSubmit(changePassword)} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">New Password</label>
-                  <input 
-                    type="password" 
-                    placeholder="--------"
-                    className="w-full glass-input px-3 py-1.5 text-xs" 
-                    {...passRegister('newPassword', { required: 'Password is required', minLength: { value: 6, message: 'Must be 6+ chars' } })}
-                  />
-                  {passErrors.newPassword && <span className="text-[9px] text-red-500 mt-0.5 block">{passErrors.newPassword.message}</span>}
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Verify Password</label>
-                  <input 
-                    type="password" 
-                    placeholder="--------"
-                    className="w-full glass-input px-3 py-1.5 text-xs" 
-                    {...passRegister('confirmPassword', { required: 'Please confirm password' })}
-                  />
-                </div>
-              </div>
-
-              <button type="submit" disabled={updatingPassword} className="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold px-4 py-2 rounded-xl text-xs shadow-md transition-all">
-                {updatingPassword ? 'Updating...' : 'Update Password'}
-              </button>
-            </form>
+          <div className="border-t border-slate-100 dark:border-slate-850 pt-4 space-y-2">
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select AI Model</label>
+            <select
+              value={selectedModel}
+              onChange={handleModelChange}
+              className="w-full glass-input px-3 py-2 text-xs cursor-pointer focus:ring-2 focus:ring-brand-500/25"
+            >
+              <option value="gemini" className="dark:bg-slate-900 text-slate-800 dark:text-slate-200">Gemini 1.5 Flash (Recommended)</option>
+              <option value="openai" className="dark:bg-slate-900 text-slate-800 dark:text-slate-200">OpenAI GPT-4o-mini</option>
+            </select>
           </div>
-
-          {/* Danger Zone */}
-          <div className="glass-panel p-5 border-red-500/20 dark:border-red-950/20 bg-red-500/5">
-            <h4 className="font-bold text-sm text-red-600 mb-2 flex items-center gap-2"><TrashIcon className="w-5 h-5 text-red-500 animate-pulse" /> Danger Zone</h4>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-4">Deleting your account is permanent. All historical reports, user credentials, and active watchlist bookmarks will be destroyed.</p>
-            <button onClick={deleteAccount} className="bg-red-500 hover:bg-red-600 text-white font-semibold px-4 py-2 rounded-xl text-xs shadow-md">
-              Delete Account Permanently
-            </button>
-          </div>
-
         </div>
 
+        {/* Notifications Config Panel */}
+        <div className="glass-panel p-6 space-y-6 bg-white dark:bg-slate-900/60 shadow-lg border border-slate-200/50 dark:border-slate-800/40 rounded-2xl">
+          <div>
+            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-1">
+              <BellIcon className="w-5 h-5 text-amber-500" />
+              Notifications
+            </h3>
+            <p className="text-[10px] text-slate-400">Trigger settings for analytical event notifications.</p>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-850 pt-4">
+            <div>
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-250 block">Email Notifications</span>
+              <span className="text-[10px] text-slate-400">Receive email alerts on successful runs</span>
+            </div>
+            <Switch
+              checked={notificationsEnabled}
+              onChange={toggleNotifications}
+              className={`${
+                notificationsEnabled ? 'bg-brand-500' : 'bg-slate-200 dark:bg-slate-700'
+              } relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none`}
+            >
+              <span
+                className={`${
+                  notificationsEnabled ? 'translate-x-5' : 'translate-x-0'
+                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+              />
+            </Switch>
+          </div>
+        </div>
+
+        {/* Other Platform Config Panel */}
+        <div className="glass-panel p-6 space-y-6 bg-white dark:bg-slate-900/60 shadow-lg border border-slate-200/50 dark:border-slate-800/40 rounded-2xl">
+          <div>
+            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-1">
+              <GlobeAltIcon className="w-5 h-5 text-emerald-500" />
+              Other Settings
+            </h3>
+            <p className="text-[10px] text-slate-400">Configure language localizations.</p>
+          </div>
+
+          <div className="border-t border-slate-100 dark:border-slate-850 pt-4 space-y-2">
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">System Language</label>
+            <select
+              value={locale}
+              onChange={handleLanguageChange}
+              className="w-full glass-input px-3 py-2 text-xs cursor-pointer focus:ring-2 focus:ring-brand-500/25"
+            >
+              <option value="en" className="dark:bg-slate-900 text-slate-800 dark:text-slate-200">English (EN)</option>
+              <option value="es" className="dark:bg-slate-900 text-slate-800 dark:text-slate-200">Español (ES)</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Danger Zone */}
+      <div className="glass-panel p-6 border border-red-200/30 dark:border-red-950/20 bg-red-500/5 rounded-2xl space-y-4">
+        <h3 className="font-bold text-sm text-red-600 flex items-center gap-2">
+          <ExclamationTriangleIcon className="w-5 h-5 text-red-500 animate-pulse" />
+          Danger Zone
+        </h3>
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">
+          Deleting your account is permanent. All historical reports, user credentials, API log journals, and active watchlist bookmarks will be destroyed. This action cannot be reversed.
+        </p>
+        <button
+          onClick={handleDeleteAccount}
+          className="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shadow-md"
+        >
+          Delete Account Permanently
+        </button>
       </div>
 
     </div>
@@ -242,7 +262,3 @@ const Settings = () => {
 };
 
 export default Settings;
-
-
-
-

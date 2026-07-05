@@ -1,4 +1,3 @@
-import React from 'react';
 import { 
   ResponsiveContainer, 
   BarChart, 
@@ -11,7 +10,10 @@ import {
   Area, 
   PieChart, 
   Pie, 
-  Cell 
+  Cell,
+  LineChart,
+  Line,
+  Legend
 } from 'recharts';
 
 // Formatting helper
@@ -147,6 +149,27 @@ export const CompetitorPieChart = ({ competitors }) => {
           </div>
         ))}
       </div>
+    </div>
+  );
+};
+
+export const FinancialPerformanceLineChart = ({ data }) => {
+  return (
+    <div className="h-64 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-800" />
+          <XAxis dataKey="year" stroke="#94a3b8" fontSize={10} tickLine={false} />
+          <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={formatBillions} />
+          <Tooltip 
+            formatter={(value, name) => [`$${(value / 1e9).toFixed(2)} Billion`, name === 'revenue' ? 'Revenue' : 'Net Income']}
+            contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+          />
+          <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="revenue" />
+          <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="profit" />
+          <Legend verticalAlign="top" height={36} iconType="circle" />
+        </LineChart>
+      </ResponsiveContainer>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-﻿const mysql = require('mysql2/promise');
+const mysql = require('mysql2/promise');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
@@ -84,6 +84,7 @@ const fallbackQueryEngine = {
         theme: 'dark',
         language: 'en',
         notifications_enabled: true,
+        ai_model: 'gemini',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
@@ -171,8 +172,8 @@ const fallbackQueryEngine = {
     }
 
     // 5. UPDATE settings
-    if (queryClean.match(/UPDATE settings SET theme = \?, language = \?, notifications_enabled = \?/i)) {
-      const [theme, language, notifications_enabled, user_id] = params;
+    if (queryClean.match(/UPDATE settings SET theme = \?, language = \?, notifications_enabled = \?, ai_model = \?/i)) {
+      const [theme, language, notifications_enabled, ai_model, user_id] = params;
       let setting = fallbackDb.settings.find(s => s.user_id === parseInt(user_id));
       if (!setting) {
         setting = { user_id: parseInt(user_id) };
@@ -181,6 +182,7 @@ const fallbackQueryEngine = {
       setting.theme = theme;
       setting.language = language;
       setting.notifications_enabled = Boolean(notifications_enabled);
+      setting.ai_model = ai_model || 'gemini';
       setting.updated_at = new Date().toISOString();
       saveFallbackDb();
       return [{ affectedRows: 1 }];
@@ -205,6 +207,18 @@ const fallbackQueryEngine = {
     }
 
     // 7. UPDATE research_history
+    if (queryClean.match(/UPDATE research_history SET company_name = \?, status = \?, response_time_ms = \?, tokens_used = \?/i)) {
+      const [company_name, status, response_time_ms, tokens_used, id] = params;
+      const history = fallbackDb.research_history.find(h => h.id === parseInt(id));
+      if (history) {
+        history.company_name = company_name;
+        history.status = status;
+        history.response_time_ms = parseInt(response_time_ms);
+        history.tokens_used = parseInt(tokens_used);
+        saveFallbackDb();
+      }
+      return [{ affectedRows: history ? 1 : 0 }];
+    }
     if (queryClean.match(/UPDATE research_history SET status = \?, response_time_ms = \?, tokens_used = \?/i)) {
       const [status, response_time_ms, tokens_used, id] = params;
       const history = fallbackDb.research_history.find(h => h.id === parseInt(id));
@@ -458,6 +472,3 @@ module.exports = {
     return pool.execute(sql, params);
   }
 };
-
-
-

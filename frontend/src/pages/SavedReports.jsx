@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { DocumentTextIcon, TrashIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
+import { DocumentTextIcon, TrashIcon, ArrowTopRightOnSquareIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
 const SavedReports = () => {
@@ -10,6 +10,8 @@ const SavedReports = () => {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState([]);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('ALL');
 
   useEffect(() => {
     fetchSavedReports();
@@ -41,11 +43,22 @@ const SavedReports = () => {
     }
   };
 
+  const filteredReports = reports.filter((report) => {
+    const matchesQuery = [report.company_name, report.ticker]
+      .filter(Boolean)
+      .some((value) => value.toLowerCase().includes(query.toLowerCase()));
+    return matchesQuery && (filter === 'ALL' || report.recommendation === filter);
+  });
+
+  const averageScore = reports.length
+    ? Math.round(reports.reduce((sum, report) => sum + Number(report.investment_score || 0), 0) / reports.length)
+    : 0;
+
   if (loading) {
     return (
       <div className="space-y-6">
         <div className="h-10 w-48 skeleton-shimmer rounded-xl" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {[...Array(4)].map((_, idx) => (
             <div key={idx} className="h-44 glass-panel skeleton-shimmer rounded-2xl" />
           ))}
@@ -58,10 +71,39 @@ const SavedReports = () => {
     <div className="space-y-6">
       
       {/* Title */}
-      <div>
-        <h2 className="text-3xl font-display font-extrabold text-slate-800 dark:text-slate-100">{t('savedReports')}</h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400">Manage and read your bookmarked, high-interest research dossiers.</p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="page-eyebrow">Research library</p>
+          <h2 className="page-title">{t('savedReports')}</h2>
+          <p className="page-subtitle">Your most important company research, organized and ready to revisit.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 dark:border-slate-800 dark:bg-slate-900">
+            <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Reports</span>
+            <strong className="text-sm text-slate-800 dark:text-white">{reports.length}</strong>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 dark:border-slate-800 dark:bg-slate-900">
+            <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Average score</span>
+            <strong className="text-sm text-brand-600">{averageScore}/100</strong>
+          </div>
+        </div>
       </div>
+
+      {reports.length > 0 && (
+        <div className="glass-panel flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-sm">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search company or ticker..." className="glass-input w-full py-2 pl-9 pr-3 text-xs" />
+          </div>
+          <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-950">
+            {['ALL', 'BUY', 'HOLD', 'PASS'].map((option) => (
+              <button key={option} onClick={() => setFilter(option)} className={'rounded-lg px-3 py-1.5 text-[10px] font-bold transition ' + (filter === option ? 'bg-white text-brand-600 shadow-sm dark:bg-slate-800' : 'text-slate-400 hover:text-slate-700')}>
+                {option === 'ALL' ? 'All reports' : option}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Grid */}
       {reports.length === 0 ? (
@@ -70,8 +112,8 @@ const SavedReports = () => {
           <span className="text-xs">No reports saved yet. Compile research on a stock ticker and click the Save button!</span>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {reports.map((report) => {
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filteredReports.map((report) => {
             let badgeColor = 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
             if (report.recommendation === 'HOLD') badgeColor = 'bg-amber-500/10 text-amber-500 border-amber-500/20';
             if (report.recommendation === 'PASS') badgeColor = 'bg-red-500/10 text-red-500 border-red-500/20';
