@@ -1,326 +1,214 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // <-- useNavigate इम्पोर्ट किया
 import { 
-  SparklesIcon, 
-  ArrowRightIcon, 
-  CpuChipIcon, 
-  ChartPieIcon, 
-  DocumentArrowDownIcon, 
-  ShieldCheckIcon,
-  ChevronDownIcon,
-  EnvelopeIcon,
-  UserIcon,
-  ChatBubbleLeftRightIcon
-} from '@heroicons/react/24/outline';
+  ArrowRight, BarChart3, LineChart, PieChart, TrendingUp, 
+  Search, Shield, Zap, Globe, Sparkles, ChevronDown, 
+  CheckCircle2, Menu, X, ArrowUpRight
+} from 'lucide-react';
 
-const LandingPage = () => {
-  const navigate = useNavigate();
-  const [activeFaq, setActiveFaq] = useState(null);
-  
-  // Custom typing animation state
-  const typingWords = ['Institutional Equity Research', 'Multi-Agent SWOT Audits', 'Automated Financial Modeling', 'Real-Time News Sentiment'];
-  const [currentWordIdx, setCurrentWordIdx] = useState(0);
-  const [displayedText, setDisplayedText] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
+// Alpha Theme Constants
+const C = {
+  bg: '#0B0F17',
+  card: '#151B26',
+  blue: '#3B82F6',
+  cyan: '#06B6D4',
+  text: '#F3F4F6',
+  muted: '#9CA3AF',
+  border: 'rgba(255,255,255,0.06)'
+};
 
-  useEffect(() => {
-    let timer;
-    const currentWord = typingWords[currentWordIdx];
-    
-    if (isDeleting) {
-      timer = setTimeout(() => {
-        setDisplayedText(prev => prev.slice(0, -1));
-      }, 50);
-    } else {
-      timer = setTimeout(() => {
-        setDisplayedText(currentWord.slice(0, displayedText.length + 1));
-      }, 100);
-    }
-
-    if (!isDeleting && displayedText === currentWord) {
-      timer = setTimeout(() => setIsDeleting(true), 1500);
-    } else if (isDeleting && displayedText === '') {
-      setIsDeleting(false);
-      setCurrentWordIdx(prev => (prev + 1) % typingWords.length);
-    }
-
-    return () => clearTimeout(timer);
-  }, [displayedText, isDeleting, currentWordIdx]);
-
-  const faqs = [
-    { q: 'How does the LangGraph multi-agent network work?', a: 'InvestIQ routes your query through 7 specialized AI agents (Research, Finance, News, Competitors, SWOT, Risk, and Decision). Each agent processes findings and feeds structured data to the next node in the state graph, producing a compiled institutional report.' },
-    { q: 'What database and financial APIs do you use?', a: 'We compile fundamental balance sheets and income reports through Yahoo Finance and AlphaVantage, scan global headlines using News API and Tavily Search, and use cached databases to protect you from API rate limits.' },
-    { q: 'Can I export PDF reports directly to my local drive?', a: 'Yes! The report dashboard features a high-fidelity PDF export function that packages all profiles, multi-year finance tables, competitor grids, and decision rationales into an A4 print-ready PDF document.' }
-  ];
+export default function LandingPage() {
+  const navigate = useNavigate(); // <-- navigate फंक्शन इनिशियलाइज़ किया
+  const [openQ, setOpenQ] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen overflow-x-hidden">
+    <div className="min-h-screen text-gray-100 relative overflow-hidden font-sans select-none selection:bg-blue-500/30" style={{ backgroundColor: C.bg }}>
       
-      {/* Sticky Hero Navbar */}
-      <nav className="sticky top-0 bg-white/70 dark:bg-slate-950/70 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-900/50 h-16 flex items-center justify-between px-8 z-50">
-        <div className="text-xl font-display font-extrabold bg-gradient-to-r from-brand-500 to-indigo-500 bg-clip-text text-transparent cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-          InvestIQ
+      {/* Background Gradients */}
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/3 right-1/4 w-[600px] h-[600px] bg-cyan-600/10 rounded-full blur-[150px] pointer-events-none" />
+
+      {/* Navbar */}
+      <nav className="sticky top-0 z-50 backdrop-blur-xl border-b" style={{ borderColor: C.border, backgroundColor: 'rgba(11, 15, 23, 0.7)' }}>
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/10" style={{ background: `linear-gradient(135deg, ${C.blue}, ${C.cyan})` }}>
+              <TrendingUp className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-xl font-bold tracking-tight text-white"><span style={{ color: C.blue }}>Alpha</span></span>
+          </div>
+
+          <div className="hidden md:flex items-center gap-8">
+            {['Features', 'Dashboard', 'Pricing', 'FAQ'].map((item) => (
+              <a key={item} href={`#${item.toLowerCase()}`} className="text-sm font-medium transition-colors hover:text-white" style={{ color: C.muted }}>
+                {item}
+              </a>
+            ))}
+          </div>
+
+          <div className="hidden md:flex items-center gap-4">
+            {/* बटन पर useNavigate लगाया */}
+            <button 
+              onClick={() => navigate('/login')} 
+              className="text-sm font-semibold px-4 py-2 rounded-lg text-white transition-transform active:scale-95" 
+              style={{ background: C.blue }}
+            >
+              Analyze a Company
+            </button>
+          </div>
+
+          <button className="md:hidden text-white" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
         </div>
-        <div className="flex items-center gap-6">
-          <button onClick={() => navigate('/login')} className="text-sm font-medium hover:text-brand-500 transition-colors">Log In</button>
-          <button onClick={() => navigate('/register')} className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-md shadow-brand-500/10">Get Started</button>
-        </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-b px-6 py-4 flex flex-col gap-4 animate-in fade-in slide-in-from-top-5 duration-200" style={{ backgroundColor: C.bg, borderColor: C.border }}>
+            {['Features', 'Dashboard', 'Pricing', 'FAQ'].map((item) => (
+              <a key={item} href={`#${item.toLowerCase()}`} onClick={() => setMobileMenuOpen(false)} className="text-base font-medium" style={{ color: C.muted }}>
+                {item}
+              </a>
+            ))}
+            <button 
+              onClick={() => { setMobileMenuOpen(false); navigate('/login'); }} 
+              className="w-full text-center text-sm font-semibold py-2.5 rounded-lg text-white" 
+              style={{ background: C.blue }}
+            >
+              Analyze a Company
+            </button>
+          </div>
+        )}
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-24 pb-20 px-8 flex flex-col items-center text-center max-w-5xl mx-auto">
-        {/* Badge */}
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }} 
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-1.5 px-3 py-1 bg-brand-500/10 dark:bg-brand-500/20 text-brand-600 dark:text-brand-400 rounded-full text-xs font-semibold mb-6 border border-brand-500/20"
-        >
-          <SparklesIcon className="w-4 h-4 animate-pulse" />
-          Next-Gen AI Orchestrator
-        </motion.div>
-
-        {/* Headline */}
-        <h1 className="text-4xl md:text-6xl font-display font-extrabold tracking-tight max-w-4xl leading-[1.1] mb-6">
-          Autonomous Investment Audits Powered by{' '}
-          <span className="bg-gradient-to-r from-brand-500 via-indigo-500 to-purple-500 bg-clip-text text-transparent">
-            LangGraph
-          </span>
-        </h1>
-
-        {/* Typing Subhead */}
-        <div className="h-8 mb-8 text-lg md:text-xl font-medium text-slate-500 dark:text-slate-400 flex items-center justify-center">
-          <span>{displayedText}</span>
-          <span className="w-1.5 h-5 bg-brand-500 ml-1.5 animate-pulse" />
+      <section className="relative max-w-7xl mx-auto px-6 pt-24 pb-20 text-center flex flex-col items-center">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium mb-6 backdrop-blur-md bg-white/5" style={{ borderColor: C.border }}>
+          <Sparkles className="w-3.5 h-3.5" style={{ color: C.cyan }} />
+          <span style={{ color: C.muted }}>Next-Gen Financial Intelligence</span>
         </div>
+        
+        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight max-w-4xl leading-[1.1] mb-6 text-white">
+          Institutional-Grade <span className="bg-clip-text text-transparent" style={{ backgroundImage: `linear-gradient(135deg, ${C.blue}, ${C.cyan})` }}>Equity Research</span> For Everyone.
+        </h1>
+        
+        <p className="text-lg md:text-xl max-w-2xl mb-10 leading-relaxed" style={{ color: C.muted }}>
+          Stop drowning in financial statements. 
+           Alpha transforms complex corporate filings, metrics, and data into clear, actionable investment insights.
+        </p>
 
-        {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-16">
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+          {/* मुख्य बटन पर useNavigate लगाया */}
           <button 
             onClick={() => navigate('/register')} 
-            className="flex items-center gap-2 bg-gradient-to-r from-brand-500 to-indigo-500 hover:from-brand-600 hover:to-indigo-600 text-white font-semibold px-8 py-3.5 rounded-xl transition-all shadow-lg shadow-brand-500/20 transform hover:-translate-y-0.5"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-semibold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0 shadow-lg shadow-blue-500/10" 
+            style={{ background: C.blue }}
           >
-            Create Free Account <ArrowRightIcon className="w-4 h-4" />
+            Analyze a Company <ArrowRight className="w-4 h-4" />
           </button>
-          <button 
-            onClick={() => navigate('/login')} 
-            className="glass-panel hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 font-semibold px-8 py-3.5 rounded-xl transition-all"
-          >
-            Sign In to Dashboard
-          </button>
-        </div>
-
-        {/* Floating Mock UI dashboard */}
-        <motion.div 
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.6 }}
-          className="w-full max-w-4xl glass-panel p-3 border border-slate-200/50 dark:border-slate-800/50 shadow-2xl rounded-2xl relative"
-        >
-          <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-200/40 dark:border-slate-800/40 mb-3">
-            <div className="w-3 h-3 bg-red-500/80 rounded-full" />
-            <div className="w-3 h-3 bg-yellow-500/80 rounded-full" />
-            <div className="w-3 h-3 bg-green-500/80 rounded-full" />
-            <span className="text-[10px] text-slate-400 ml-2 font-mono">http://investiq.saas/dashboard</span>
-          </div>
-          <div className="bg-slate-900 rounded-xl overflow-hidden p-6 aspect-video flex flex-col justify-between text-left text-white border border-slate-800 shadow-inner">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-[10px] uppercase tracking-wider text-brand-400 font-bold">Research workspace</span>
-                <h3 className="text-2xl font-display font-semibold mt-1">Apple Inc. (AAPL)</h3>
-              </div>
-              <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold rounded-lg">BUY (Score: 88/100)</span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-6">
-              <div className="p-3 bg-slate-800/40 border border-slate-800 rounded-xl">
-                <div className="text-[10px] text-slate-400">Market Cap</div>
-                <div className="text-lg font-bold mt-1 text-slate-100">$3.20 Trillion</div>
-              </div>
-              <div className="p-3 bg-slate-800/40 border border-slate-800 rounded-xl">
-                <div className="text-[10px] text-slate-400">P/E Ratio</div>
-                <div className="text-lg font-bold mt-1 text-slate-100">28.5x</div>
-              </div>
-              <div className="p-3 bg-slate-800/40 border border-slate-800 rounded-xl">
-                <div className="text-[10px] text-slate-400">Revenue Growth</div>
-                <div className="text-lg font-bold mt-1 text-slate-100">+8.2% Y/Y</div>
-              </div>
-              <div className="p-3 bg-slate-800/40 border border-slate-800 rounded-xl">
-                <div className="text-[10px] text-slate-400">Sentiment</div>
-                <div className="text-lg font-bold mt-1 text-emerald-400">82% Bullish</div>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-800/80 pt-4 flex justify-between items-center text-xs text-slate-400">
-              <span className="flex items-center gap-1.5"><CpuChipIcon className="w-4 h-4 text-brand-500" /> Multi-Agent state analysis compiled.</span>
-              <span className="text-[10px] font-mono">Response Speed: 3.2s</span>
-            </div>
-          </div>
-        </motion.div>
-      </section>
-
-      {/* Workflow Timeline Section */}
-      <section className="py-20 bg-slate-100/50 dark:bg-slate-900/30 border-y border-slate-200/50 dark:border-slate-900/50 px-8">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-display font-extrabold mb-4">Under The Hood: LangGraph Workflow</h2>
-            <p className="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto">See how your search cascades through 7 distinct autonomous intelligence layers to synthesize raw market metrics into a final decision.</p>
-          </div>
-
-          <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 md:ml-32 space-y-12">
-            {[
-              { title: '1. Research Agent', desc: 'Queries Tavily and local databases to aggregate business summaries, CEO history, headquarters, and core operations.' },
-              { title: '2. Finance Agent', desc: 'Queries fundamental balance sheets, calculating P/E ratios, gross and net margins, EPS, debt levels, and historical FCF.' },
-              { title: '3. News Sentiment Agent', desc: 'Gathers recent global financial headlines, mapping stories to sentiment metrics and generating a compound score.' },
-              { title: '4. Competitor Agent', desc: 'Compares the company against leading industry peers, identifying market share distribution and core advantages/disadvantages.' },
-              { title: '5. SWOT Specialist', desc: 'Maps company parameters, financials, and news trends into a complete SWOT analysis grid.' },
-              { title: '6. Risk Committee', desc: 'Rates vulnerability to business shifts, regulatory changes, macro-economic conditions, and cyber/technology disruptions.' },
-              { title: '7. Final Decision Chair', desc: 'Formulates investment recommendations (Buy/Hold/Pass), confidence levels, justification points, and compiled executive summaries.' }
-            ].map((step, idx) => (
-              <div key={idx} className="relative pl-8 md:pl-12 group">
-                <div className="absolute -left-[11px] top-1.5 w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 border-4 border-slate-50 dark:border-slate-950 group-hover:bg-brand-500 transition-colors" />
-                <div className="absolute -left-20 top-1 text-xs font-mono text-slate-400 hidden md:block">STAGE 0{idx + 1}</div>
-                <h4 className="text-lg font-bold mb-1 text-slate-700 dark:text-slate-200">{step.title}</h4>
-                <p className="text-slate-500 dark:text-slate-400 text-sm max-w-3xl leading-relaxed">{step.desc}</p>
-              </div>
-            ))}
-          </div>
+          <a href="#features" className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-semibold border transition-colors bg-white/5 hover:bg-white/10" style={{ borderColor: C.border, color: C.text }}>
+            Explore Features
+          </a>
         </div>
       </section>
 
-      {/* Pricing Cards */}
-      <section className="py-20 px-8 max-w-5xl mx-auto">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl font-display font-extrabold mb-4">Pricing Models</h2>
-          <p className="text-slate-500 dark:text-slate-400">Start free, upgrade as your trading portfolio grows.</p>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-8">
-          {[
-            { plan: 'Free Tier', price: '$0', desc: 'For retail hobbyists getting started.', features: ['5 stock analyses per day', 'Local DB persistence', 'Standard PDF print exports', 'General news sentiment check'] },
-            { plan: 'Pro Analyst', price: '$49', desc: 'For active traders and researchers.', features: ['Unlimited searches', 'Active LangGraph API execution', 'Competitor matrix & SWOT overlays', 'Live token usage monitoring', 'Priority email support'], recommended: true },
-            { plan: 'Institutional', price: '$199', desc: 'For asset management teams.', features: ['Multi-seat team licenses', 'Custom PDF report branding', 'Unlimited Tavily Search queries', 'Custom API access integrations', 'Dedicated 24/7 account support'] }
-          ].map((card, idx) => (
-            <div 
-              key={idx} 
-              className={`glass-panel p-6 border flex flex-col justify-between relative transition-transform duration-300 hover:-translate-y-1 ${
-                card.recommended 
-                  ? 'border-brand-500/50 shadow-brand-500/5 ring-1 ring-brand-500/30' 
-                  : 'border-slate-200/50 dark:border-slate-800/50'
-              }`}
-            >
-              {card.recommended && (
-                <span className="absolute -top-3 right-6 bg-brand-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Most Popular</span>
-              )}
-              <div>
-                <h3 className="text-xl font-bold font-display">{card.plan}</h3>
-                <p className="text-xs text-slate-400 mt-1">{card.desc}</p>
-                <div className="my-6">
-                  <span className="text-4xl font-extrabold font-display">{card.price}</span>
-                  <span className="text-sm text-slate-400"> / month</span>
-                </div>
-                <ul className="space-y-3 mb-8">
-                  {card.features.map((f, i) => (
-                    <li key={i} className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                      <ShieldCheckIcon className="w-4 h-4 text-brand-500 shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <button 
-                onClick={() => navigate('/register')}
-                className={`w-full py-2.5 rounded-xl font-semibold text-xs transition-all ${
-                  card.recommended 
-                    ? 'bg-brand-500 hover:bg-brand-600 text-white shadow-md shadow-brand-500/10' 
-                    : 'bg-slate-200/50 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
-                }`}
-              >
-                Choose {card.plan}
-              </button>
+      {/* Trust Badges */}
+      <section className="max-w-7xl mx-auto px-6 pb-24 border-b" style={{ borderColor: C.border }}>
+        <p className="text-center text-xs font-semibold tracking-widest uppercase mb-6" style={{ color: C.muted }}>POWERING INTELLIGENT INVESTMENTS WITH ADVANCED METRICS</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 items-center justify-items-center opacity-50">
+          {['10-K Analysis', 'DCF Valuation', 'Sentiment Scoring', 'Real-time Feeds'].map((text, i) => (
+            <div key={i} className="flex items-center gap-2 font-semibold text-sm tracking-wide text-white">
+              <CheckCircle2 className="w-4 h-4 text-blue-500" /> {text}
             </div>
           ))}
         </div>
       </section>
 
-      {/* FAQS Accordion */}
-      <section className="py-20 bg-slate-100/50 dark:bg-slate-900/30 border-t border-slate-200/50 dark:border-slate-900/50 px-8">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl font-display font-extrabold text-center mb-12">Frequently Asked Questions</h2>
-          <div className="space-y-4">
-            {faqs.map((faq, idx) => (
-              <div key={idx} className="glass-panel border border-slate-200/60 dark:border-slate-800/60 overflow-hidden">
-                <button 
-                  onClick={() => setActiveFaq(activeFaq === idx ? null : idx)}
-                  className="flex items-center justify-between w-full p-4 text-left font-semibold text-sm hover:bg-slate-100/50 dark:hover:bg-slate-800/20 transition-colors"
-                >
-                  {faq.q}
-                  <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${activeFaq === idx ? 'rotate-180' : ''}`} />
-                </button>
-                <AnimatePresence>
-                  {activeFaq === idx && (
-                    <motion.div 
-                      initial={{ height: 0 }}
-                      animate={{ height: 'auto' }}
-                      exit={{ height: 0 }}
-                      className="border-t border-slate-200/40 dark:border-slate-800/40 text-xs text-slate-500 dark:text-slate-400 leading-relaxed"
-                    >
-                      <div className="p-4">{faq.a}</div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            ))}
+      {/* Core Value Props (Features) */}
+      <section id="features" className="max-w-7xl mx-auto px-6 py-24">
+        <div className="text-center max-w-3xl mx-auto mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">Engineered For Depth. Built For Speed.</h2>
+          <p style={{ color: C.muted }}>Everything you need to evaluate equities, perfectly unified into a high-performance system.</p>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6">
+          <div className="p-8 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: C.card, borderColor: C.border }}>
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-6 bg-blue-500/10" style={{ color: C.blue }}>
+              <BarChart3 className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-bold mb-3 text-white">Granular Financials</h3>
+            <p className="text-sm leading-relaxed" style={{ color: C.muted }}>Access perfectly clean income statements, balance sheets, and cash flows dating back a decade with visual breakdown tools.</p>
+          </div>
+
+          <div className="p-8 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: C.card, borderColor: C.border }}>
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-6 bg-cyan-500/10" style={{ color: C.cyan }}>
+              <LineChart className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-bold mb-3 text-white">Automated DCF Models</h3>
+            <p className="text-sm leading-relaxed" style={{ color: C.muted }}>Calculate intrinsic stock values instantly using custom or pre-set Discounted Cash Flow assumptions and sensitivity analysis scripts.</p>
+          </div>
+
+          <div className="p-8 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: C.card, borderColor: C.border }}>
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-6 bg-indigo-500/10" style={{ color: '#6366F1' }}>
+              <Zap className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-bold mb-3 text-white">Filing Insights</h3>
+            <p className="text-sm leading-relaxed" style={{ color: C.muted }}>Our analysis scans dense 10-K and 10-Q documents to flag dynamic risk factor changes, hidden liabilities, and management changes.</p>
           </div>
         </div>
       </section>
 
-      {/* Contact Form Section */}
-      <section className="py-20 px-8 max-w-xl mx-auto">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-display font-extrabold mb-3">Get in Touch</h2>
-          <p className="text-slate-500 dark:text-slate-400">Have questions about integrations or enterprise features?</p>
+      {/* FAQ Section */}
+      <section id="faq" className="max-w-4xl mx-auto px-6 py-24 border-t" style={{ borderColor: C.border }}>
+        <h2 className="text-3xl font-bold text-center mb-12 text-white">Frequently Asked Questions</h2>
+        <div className="space-y-4">
+          {[
+            { q: "Where does  Alpha pull its financial data from?", a: "We aggregate high-fidelity institutional market data, directly synced with SEC filings, updated in real time as companies publish their reports." },
+            { q: "Can I customize the valuation models?", a: "Yes. Every automated valuation allows full adjustments over assumptions like terminal growth rate, WACC, and revenue multi-stage projection factors." },
+            { q: "Is there a trial for the institutional API access?", a: "Absolutely. Our Enterprise tier offers a sandbox API access window. Get in touch with our tech engineering desk for custom key deployments." }
+          ].map((item, idx) => (
+            <div key={idx} className="border rounded-xl overflow-hidden transition-colors" style={{ backgroundColor: C.card, borderColor: C.border }}>
+              <button className="w-full px-6 py-4 flex items-center justify-between text-left font-semibold text-white hover:bg-white/5" onClick={() => setOpenQ(openQ === idx ? null : idx)}>
+                <span>{item.q}</span>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${openQ === idx ? 'rotate-180' : ''}`} />
+              </button>
+              {openQ === idx && (
+                <div className="px-6 pb-5 pt-1 text-sm leading-relaxed border-t border-white/5" style={{ color: C.muted }}>
+                  {item.a}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
+      </section>
 
-        <form onSubmit={(e) => { e.preventDefault(); alert('Message received! We will follow up shortly.'); }} className="glass-panel p-6 border border-slate-200/60 dark:border-slate-800/60 space-y-4">
-          <div>
-            <label className="block text-xs font-semibold mb-1.5 text-slate-500 dark:text-slate-400">Full Name</label>
-            <div className="relative">
-              <UserIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input type="text" required placeholder="John Doe" className="w-full glass-input pl-10 pr-4 py-2 text-xs" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold mb-1.5 text-slate-500 dark:text-slate-400">Email Address</label>
-            <div className="relative">
-              <EnvelopeIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input type="email" required placeholder="john@example.com" className="w-full glass-input pl-10 pr-4 py-2 text-xs" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold mb-1.5 text-slate-500 dark:text-slate-400">Message Description</label>
-            <div className="relative">
-              <ChatBubbleLeftRightIcon className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-              <textarea rows={4} required placeholder="Tell us how we can help..." className="w-full glass-input pl-10 pr-4 py-2 text-xs" />
-            </div>
-          </div>
-          <button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-xl text-xs shadow-md shadow-brand-500/10">
-            Submit Message
-          </button>
-        </form>
+      {/* Bottom CTA */}
+      <section className="max-w-5xl mx-auto px-6 py-20 mb-20 text-center relative rounded-3xl border overflow-hidden" style={{ backgroundColor: C.card, borderColor: C.border }}>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[400px] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none" />
+        <h2 className="text-3xl md:text-5xl font-bold mb-4 text-white">Ready to Out-Research the Market?</h2>
+        <p className="max-w-xl mx-auto text-base mb-8" style={{ color: C.muted }}>Create your custom workspace today and spin up institutional quality metrics in milliseconds.</p>
+        <button 
+          onClick={() => navigate('/register')} 
+          className="px-8 py-3.5 rounded-lg font-semibold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0 shadow-lg shadow-blue-500/20" 
+          style={{ background: C.blue }}
+        >
+          Get Started For Free
+        </button>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200/60 dark:border-slate-900 py-10 text-center text-xs text-slate-400">
-        <div className="mb-4 text-sm font-semibold font-display bg-gradient-to-r from-brand-500 to-indigo-500 bg-clip-text text-transparent">InvestIQ</div>
-        <p>(c) {new Date().getFullYear()} InvestIQ Technologies Inc. All rights reserved.</p>
+      <footer className="border-t py-12" style={{ borderColor: C.border, backgroundColor: '#080C12' }}>
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center bg-blue-500">
+              <TrendingUp className="w-3.5 h-3.5 text-white" />
+            </div>
+            <span className="text-sm font-bold text-white tracking-wide">Alpha</span>
+          </div>
+          <p className="text-xs" style={{ color: C.muted }}>&copy; {new Date().getFullYear()} InvestIQ Technologies Inc. All institutional rights reserved.</p>
+        </div>
       </footer>
-
     </div>
   );
-};
-
-export default LandingPage;
-
-
-
+}
