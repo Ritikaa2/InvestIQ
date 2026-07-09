@@ -1,6 +1,6 @@
 # InvestIQ - AI Investment Research Agent Dashboard
 
-InvestIQ is a premium, production-grade AI Investment Research Dashboard that orchestrates a multi-agent system (powered by LangGraph.js and LangChain.js) to perform comprehensive security analysis. It generates professional, institutional-grade equity research reports complete with detailed financial modeling, SWOT assessments, competitor comparisons, risks, sentiment scores, and investment recommendations.
+InvestIQ is a premium, production-grade AI Investment Research Dashboard that orchestrates a multi-agent system powered by LangChain.js to perform comprehensive security analysis. It generates professional, institutional-grade equity research reports complete with detailed financial modeling, SWOT assessments, competitor comparisons, risks, sentiment scores, and investment recommendations.
 
 ---
 
@@ -127,4 +127,62 @@ cd ../frontend
 npm install
 npm run dev
 ```
+---
+
+## How It Works
+
+1. The user enters a company name or stock ticker.
+2. The backend receives the request and starts the LangChain research workflow.
+3. Financial data, company information, and recent news are fetched using external APIs.
+4. Multiple AI agents analyze the collected data to generate:
+   - Company Profile
+   - Financial Analysis
+   - Competitor Analysis
+   - SWOT Analysis
+   - Risk Assessment
+5. The final investment recommendation and confidence score are generated.
+6. The report is stored in MySQL and displayed on the dashboard.
+
+
+---
+
+## Key Decisions & Trade-offs
+
+- Used LangChain to organize the AI workflow into multiple research stages.
+- Chose MySQL for structured report storage and history management.
+- Used external financial APIs to provide up-to-date company information.
+- Real-time stock streaming and portfolio management were intentionally left out to keep the project focused on AI-powered research.
+
+
+  ---
+
+## Example Run
+
+**Input**
+
+```
+Company: TCS
+```
+
+**Output**
+
+- Recommendation: HOLD
+- Investment Score: 74/100
+- Company Profile
+- Financial Statement Analysis
+- SWOT Analysis
+- Risk Assessment
+- Final Investment Recommendation
+
+  ---
+
+## Future Improvements
+
+- Real-time stock price updates
+- Company comparison dashboard
+- Portfolio management
+- Interactive financial charts
+- Cloud deployment
+
+  
 Navigate to `http://localhost:5173` to explore the app.
